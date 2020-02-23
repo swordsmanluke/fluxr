@@ -1,8 +1,9 @@
 use regex::{Match, Regex};
 
 pub fn slice(s: &str, start: isize, end: isize) -> String {
-    let ustart: usize = if start < 0 { start + s.len() as isize } else { start } as usize;
-    let uend: usize = if end < 0 { end + s.len() as isize } else { end } as usize;
+    let stripped_string = String::from(vt100_esc_sequences().replace_all(s, ""));
+    let ustart: usize = if start < 0 { start + stripped_string.len() as isize } else { start } as usize;
+    let uend: usize = if end < 0 { end + stripped_string.len() as isize } else { end } as usize;
 
     if ustart > s.len() { return String::from("") }
 

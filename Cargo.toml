@@ -8,3 +8,7 @@ edition = "2018"
 
 [dependencies]
 regex = "1"
+cursive = "0.14.0"
+cursive-multiplex = "^0.2.0"
+toml = "0.5.6"
+serde = { version = "1.0", features = ["derive"] }
