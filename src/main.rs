@@ -1,70 +1,93 @@
 extern crate regex;
 
-use std::fs::File;
-use std::io::Read;
-
-use serde::{Deserialize};
+use cursive::Cursive;
+use cursive::traits::*;
+use cursive::views::{DummyView, LinearLayout, TextView, ResizedView};
 
 use executable_command::ExecutableCommand;
-use serde::de::Error;
+use crate::tasks::Layout;
+use std::process::exit;
+use std::ops::Deref;
+use cursive::view::SizeConstraint;
 
-pub mod vt100_string;
+mod vt100_string;
+
+mod tasks;
 mod executable_command;
 
-#[derive(Deserialize)]
-struct Config {
-    tasks: Vec<Task>,
-    windows: Vec<Window>,
-}
-
-#[derive(Deserialize)]
-struct Task {
-    id: String,
-    name: String,
-    description: String,
-    path: String,
-    command: String,
-    period: String,
-}
-
-#[derive(Deserialize)]
-struct Window {
-    x: u16,
-    y: u16,
-    width: u16,
-    height: u16,
-    task_id: String,
-}
-
 fn main() {
-    let config = load_task_config().unwrap();
+    let config = tasks::load_task_config().unwrap();
+
+    // Debug layout
+    // println!("{}", config.layout);
 
     let mut cmds: Vec<ExecutableCommand> = config.tasks.iter().
-        map(|t| ExecutableCommand::new(t.command.clone(), t.path.clone())).
+        map(|t| ExecutableCommand::new(t.id.clone(),
+                                       t.command.clone(),
+                                       t.path.clone(),
+                                       t.period.clone())).
         collect();
 
-    println!("found {} cmds", cmds.len());
+    cmds = cmds.iter().map(|c| c.execute()).collect();
 
-    for _ in 0..10 {
-        cmds = cmds.iter().map(|c| c.execute()).collect();
-
-        for cmd in &cmds {
-            println!("{}", cmd.output().unwrap_or("No output".to_owned()));
-        }
-    }
-
+    // Creates the cursive root - required for every application.
+    let mut siv = Cursive::default();
+    siv.add_layer(inflate_layout(&mut cmds, config.layout));
+    siv.run();
 }
 
-fn load_task_config() -> Option<Config> {
-    let mut tasks_file = File::open("config/tasks.toml").unwrap();
-    let mut toml_tasks = String::new();
-    tasks_file.read_to_string(&mut toml_tasks).unwrap();
-    let config = toml::from_str(&toml_tasks);
-    match config {
-        Ok(conf) => Some(conf),
-        Err(err) => {
-            println!("conf err: {}", err);
-            None
-        }
+fn inflate_layout(cmds: &mut Vec<ExecutableCommand>, layout: Layout) -> Box<dyn View> {
+    let mut inflated : Box<dyn View> = match layout.kind.as_ref() {
+        "linearlayout" => build_linear_layout(cmds, layout),
+        "textview" => build_text_view(cmds, &layout),
+        _ => { Box::from(TextView::new(String::from(""))) } // empty view if we can't find one
+    };
+
+    return inflated;
+}
+
+fn build_text_view(cmds: &mut Vec<ExecutableCommand>, layout: &Layout) -> Box<dyn View> {
+    let cmd_output = text_for_command(layout.task_id.as_ref().unwrap_or(&String::from("")).as_ref(), &cmds);
+    let mut tv = TextView::new(cmd_output);
+
+    let h_const = match layout.height {
+        Some(h) => SizeConstraint::Fixed(h),
+        None => SizeConstraint::Free
+    };
+    let w_const = match layout.width {
+        Some(w) => SizeConstraint::Fixed(w),
+        None => SizeConstraint::Free
+    };
+
+    Box::from(tv.resized(w_const, h_const))
+}
+
+fn build_linear_layout(cmds: &mut Vec<ExecutableCommand>, layout: Layout) -> Box<dyn View> {
+    let mut ll: LinearLayout = match layout.orientation.unwrap().as_ref() {
+        "horizontal" => LinearLayout::horizontal(),
+        _ => LinearLayout::vertical()
+    };
+
+    for child in layout.children.unwrap_or(Vec::new()) {
+        ll.add_child(inflate_layout(cmds, child));
+        ll.add_child(DummyView.fixed_width(1).fixed_height(1));
+    }
+
+    let h_const = match layout.height {
+        Some(h) => SizeConstraint::Fixed(h),
+        None => SizeConstraint::Free
+    };
+    let w_const = match layout.width {
+        Some(w) => SizeConstraint::Fixed(w),
+        None => SizeConstraint::Free
+    };
+
+    Box::from(ll.resized(w_const, h_const))
+}
+
+fn text_for_command(id: &str, cmds: &Vec<ExecutableCommand>) -> String {
+    match cmds.iter().find(|c| c.id == String::from(id)) {
+        Some(cmd) => cmd.output().unwrap(),
+        None => String::from("")
     }
 }
