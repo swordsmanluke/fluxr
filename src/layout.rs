@@ -4,13 +4,14 @@ use std::convert::TryInto;
 
 use cursive::Cursive;
 use cursive::traits::{View, Resizable};
-use cursive::theme::{Color, PaletteColor, Theme};
+use cursive::theme::{Color, PaletteColor, Theme, Style};
 use cursive::view::SizeConstraint;
 use cursive::views::{DummyView, LinearLayout, TextView};
 
 use crate::executable_command::ExecutableCommand;
 use crate::tasks::Layout;
 use crate::cursive_formatter::{format, strip_vt100};
+use cursive::utils::span::SpannedString;
 
 
 // TODO: Rename this file to something like "cursive_wrapper" or suchlike, since Layout refers
@@ -19,7 +20,7 @@ use crate::cursive_formatter::{format, strip_vt100};
 pub fn initialize_cursive_ctx() -> Cursive {
     // Creates the cursive root - required for every application.
     let mut siv = Cursive::default();
-    let theme = custom_theme_from_cursive(&siv);
+    let theme = terminal_default_theme(&siv);
     siv.set_theme(theme);
     siv
 }
@@ -36,11 +37,16 @@ pub fn inflate_layout(cmds: &mut Vec<ExecutableCommand>, layout: Layout) -> Box<
     return inflated;
 }
 
-fn custom_theme_from_cursive(siv: &Cursive) -> Theme {
+fn terminal_default_theme(siv: &Cursive) -> Theme {
     // We'll return the current theme with a small modification.
     let mut theme = siv.current_theme().clone();
 
     theme.palette[PaletteColor::Background] = Color::TerminalDefault;
+    theme.palette[PaletteColor::Primary] = Color::TerminalDefault;
+    theme.palette[PaletteColor::Secondary] = Color::TerminalDefault;
+    theme.palette[PaletteColor::Tertiary] = Color::TerminalDefault;
+    theme.palette[PaletteColor::View] = Color::TerminalDefault;
+    theme.palette[PaletteColor::Shadow] = Color::TerminalDefault;
 
     theme
 }
@@ -63,7 +69,7 @@ fn build_text_view(cmds: &mut Vec<ExecutableCommand>, layout: &Layout) -> Box<dy
     );
 
     println!("Creating text view for {}", layout.task_id.as_ref().unwrap_or(&String::from("unknown")));
-    println!("CMD output {}", cmd_output.clone());
+    println!("CMD output {:?}", cmd_output.clone());
 
     let tv = TextView::new(cmd_output.clone());
 
@@ -93,25 +99,11 @@ fn build_linear_layout(cmds: &mut Vec<ExecutableCommand>, layout: Layout) -> Box
     Box::from(ll.resized(w_const, h_const))
 }
 
-fn text_for_command(id: &str, cmds: &Vec<ExecutableCommand>, height: &SizeConstraint, width: &SizeConstraint) -> String {
+fn text_for_command(id: &str, cmds: &Vec<ExecutableCommand>, height: &SizeConstraint, width: &SizeConstraint) -> SpannedString<Style> {
     let raw = match cmds.iter().find(|c| c.id == String::from(id)) {
         Some(cmd) => cmd.output().unwrap_or(String::from("")),
         None => String::from("")
     };
 
-    let max_lines = match height {
-        SizeConstraint::Fixed(h) => h.clone(),
-        _ => 1000
-    };
-
-    let max_width: isize = match width {
-        SizeConstraint::Fixed(w) => w.clone().try_into().unwrap_or(1000),
-        _ => 1000
-    };
-
-    let visible_lines: Vec<String> = raw.split_terminator("\n").map(|line|
-        format(line)
-    ).take(max_lines).collect();
-
-    visible_lines.join("\n")
+    format(raw.as_str())
 }
