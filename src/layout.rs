@@ -10,6 +10,8 @@ use cursive::views::{DummyView, LinearLayout, TextView};
 
 use crate::executable_command::ExecutableCommand;
 use crate::tasks::Layout;
+use crate::cursive_formatter::{format, strip_vt100};
+
 
 // TODO: Rename this file to something like "cursive_wrapper" or suchlike, since Layout refers
 //       to an object defined in our config files in tasks.rs
@@ -108,7 +110,7 @@ fn text_for_command(id: &str, cmds: &Vec<ExecutableCommand>, height: &SizeConstr
     };
 
     let visible_lines: Vec<String> = raw.split_terminator("\n").map(|line|
-                                                                        String::from(line) // vt100_string::slice(line, 0, 1000)
+        format(line)
     ).take(max_lines).collect();
 
     visible_lines.join("\n")

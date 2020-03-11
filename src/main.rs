@@ -6,6 +6,7 @@ use crate::layout::{inflate_layout, initialize_cursive_ctx};
 mod tasks;
 mod executable_command;
 mod layout;
+mod cursive_formatter;
 
 fn main() {
     let config = tasks::load_task_config().unwrap();
