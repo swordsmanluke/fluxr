@@ -1,7 +1,8 @@
 use std::process::{Command, Output};
 use std::str;
 use std::time::{SystemTime, UNIX_EPOCH};
-use regex::{Regex, Captures};
+
+use regex::Regex;
 
 pub struct ExecutableCommand {
     pub id: String,
