@@ -108,8 +108,8 @@ mod tests {
 
     fn complex_styled_string() -> StyledString {
         let mut ss = StyledString::plain("T");
-        ss.append(StyledString::styled("E", Style::from(Color::Light(BaseColor::Yellow))));
-        ss.append(StyledString::styled("S", Style::from(Color::Dark(BaseColor::Cyan))));
+        ss.append(StyledString::styled("E", Style::from(Color::Dark(BaseColor::Yellow))));
+        ss.append(StyledString::styled("S", Style::from(Color::Light(BaseColor::Cyan)).combine(Effect::Bold)));
         ss.append(StyledString::plain("T"));
         ss
     }
