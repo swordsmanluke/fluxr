@@ -7,8 +7,15 @@ mod tasks;
 mod executable_command;
 mod layout;
 mod cursive_formatter;
+extern crate simplelog;
+
+use simplelog::*;
+
+use std::fs::File;
 
 fn main() {
+    init_logging();
+
     let config = tasks::load_task_config().unwrap();
 
     // Debug layout
@@ -28,6 +35,14 @@ fn main() {
     let mut siv = initialize_cursive_ctx();
     siv.add_layer(inflate_layout(&mut cmds, config.layout));
     siv.run();
+}
+
+fn init_logging() {
+    CombinedLogger::init(
+        vec![
+            WriteLogger::new(LevelFilter::Trace, Config::default(), File::create("log/flux.log").unwrap()),
+        ]
+    ).unwrap();
 }
 
 

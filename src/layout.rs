@@ -12,6 +12,7 @@ use crate::executable_command::ExecutableCommand;
 use crate::tasks::Layout;
 use crate::cursive_formatter::{format, strip_vt100};
 use cursive::utils::span::SpannedString;
+use log::{info, trace};
 
 
 // TODO: Rename this file to something like "cursive_wrapper" or suchlike, since Layout refers
@@ -68,8 +69,8 @@ fn build_text_view(cmds: &mut Vec<ExecutableCommand>, layout: &Layout) -> Box<dy
         &w_const
     );
 
-    println!("Creating text view for {}", layout.task_id.as_ref().unwrap_or(&String::from("unknown")));
-    println!("CMD output {:?}", cmd_output.clone());
+    trace!("Creating text view for {}", layout.task_id.as_ref().unwrap_or(&String::from("unknown")));
+    info!("CMD output {:?}", cmd_output.clone());
 
     let tv = TextView::new(cmd_output.clone());
 
@@ -105,5 +106,6 @@ fn text_for_command(id: &str, cmds: &Vec<ExecutableCommand>, height: &SizeConstr
         None => String::from("")
     };
 
+    info!("Formatting task {} and string {}", id, raw.as_str());
     format(raw.as_str())
 }
