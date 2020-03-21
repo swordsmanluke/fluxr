@@ -1,8 +1,8 @@
-use regex::{Regex, Match};
+use cursive::theme::{BaseColor, Color, Effect, Style};
 use cursive::utils::markup::StyledString;
-use cursive::theme::{Color, BaseColor, Effect, Style};
-use cursive::views::TextView;
-use log::{info, trace};
+use log::info;
+use regex::{Match, Regex};
+
 use crate::cursive_formatter::TextMode::{HI_COLOR, LO_COLOR};
 
 pub fn format(s: &str) -> StyledString {

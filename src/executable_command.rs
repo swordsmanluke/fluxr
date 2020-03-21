@@ -8,7 +8,6 @@ pub struct ExecutableCommand {
     pub id: String,
     command: String,
     working_dir: String,
-    text: Option<String>,
     period: String,
     last_run: SystemTime,
     time_between_runs: u64
@@ -20,18 +19,13 @@ impl ExecutableCommand {
             id,
             command,
             working_dir,
-            text: None,
             period: period.clone(),
             last_run: UNIX_EPOCH,
             time_between_runs: calc_time_between_runs(period.as_str()),
         }
     }
 
-    pub fn execute(&self) -> ExecutableCommand { self.capture_output(self.run_command()) }
-
-    pub fn output(&self) -> Option<String> {
-        return self.text.clone();
-    }
+    pub fn execute(&self) -> (String, String) { self.convert_output(self.run_command()) }
 
     pub fn ready_to_schedule(&self) -> bool {
         self.time_since_last_run() > self.time_between_runs
@@ -59,27 +53,19 @@ impl ExecutableCommand {
             .expect("failed to execute process")
     }
 
-    fn capture_output(&self, output: Output) -> ExecutableCommand {
+    fn convert_output(&self, output: Output) -> (String, String) {
         let std_text = str::from_utf8(&output.stdout);
         let err_text = match str::from_utf8(&output.stderr) {
-            Ok(t) => Some(t.to_owned()),
-            Err(_) => None
+            Ok(t) => t.to_owned(),
+            Err(_) => String::from("")
         };
 
-        let text = match std_text {
-            Ok(t) => Some(t.to_owned()),
+        let output = match std_text {
+            Ok(t) => t.to_owned(),
             Err(_) => err_text
         };
 
-        return ExecutableCommand {
-            id: self.id.clone(),
-            text,
-            command: self.command.clone(),
-            working_dir: self.working_dir.clone(),
-            period: self.period.clone(),
-            last_run: SystemTime::now(),
-            time_between_runs: self.time_between_runs,
-        };
+        (self.id.clone(), output)
     }
 }
 
