@@ -3,8 +3,6 @@ use cursive::utils::markup::StyledString;
 use log::info;
 use regex::{Match, Regex};
 
-use crate::cursive_formatter::TextMode::{HI_COLOR, LO_COLOR};
-
 pub fn format(s: &str) -> StyledString {
     let mut styled = StyledString::new();
     let vt100_esc_codes = find_vt100s(s);
@@ -66,26 +64,26 @@ pub fn style_for_vt100_code(esc_code: &str) -> Style {
     }
 }
 
-enum TextMode {
-    LO_COLOR,
-    HI_COLOR
-}
+// enum TextMode {
+//     LO_COLOR,
+//     HI_COLOR
+// }
 
 pub fn style_for_color_code(clr_code: &str) -> Style {
     let cmds: Vec<String> = clr_code.split(";").map(|c| c.to_string()).collect();
     let mut style = Style::none();
 
-    let mut mode = TextMode::LO_COLOR;
+    // let mut mode = TextMode::LO_COLOR;
 
     for color_cmd in cmds.iter().map(|c| c.parse::<u32>().unwrap()) {
         let next_style: Style = match color_cmd {
             1 => { style.combine(Effect::Bold); style }
             4 => { style.combine(Effect::Underline); style }
-            30..=37 => { mode = LO_COLOR; Style::from(Color::Dark(BaseColor::from((color_cmd - 30) as u8))) },
-            40..=47 => { mode = LO_COLOR; Style::from(Color::Dark(BaseColor::from((color_cmd - 40) as u8))) },
-            38 => { mode = HI_COLOR; style }
-            90..=97 => { mode = LO_COLOR; Style::from(Color::Light(BaseColor::from((color_cmd - 90) as u8))).combine(Effect::Bold) },
-            100..=107 => { mode = LO_COLOR; Style::from(Color::Light(BaseColor::from((color_cmd - 100) as u8))).combine(Effect::Bold) },
+            30..=37 => { /*mode = LO_COLOR;*/ Style::from(Color::Dark(BaseColor::from((color_cmd - 30) as u8))) },
+            40..=47 => { /*mode = LO_COLOR;*/ Style::from(Color::Dark(BaseColor::from((color_cmd - 40) as u8))) },
+            38 => { /*mode = HI_COLOR;*/ style }
+            90..=97 => { /*mode = LO_COLOR;*/ Style::from(Color::Light(BaseColor::from((color_cmd - 90) as u8))).combine(Effect::Bold) },
+            100..=107 => { /*mode = LO_COLOR;*/ Style::from(Color::Light(BaseColor::from((color_cmd - 100) as u8))).combine(Effect::Bold) },
             _ => style
         };
 

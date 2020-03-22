@@ -27,17 +27,16 @@ fn main() {
     let config = tasks::load_task_config().unwrap();
     let layout = config.layout;
 
-    let runner = TaskRunner::new(config.tasks);
-
-    println!("Setting up siv!");
-
     let (tx, rx) = mpsc::channel();
 
+    let runner = TaskRunner::new(config.tasks, tx);
+
     thread::spawn( move || {
-        tx.send(runner.update());
+        runner.run_update_loop();
     });
 
     let uithread = thread::spawn(move || {
+        println!("Setting up siv!");
         let mut siv = initialize_cursive_ctx();
         let mut ctx = UIContenxt::new(layout, rx);
         siv.add_global_callback(Event::Refresh, move |s| { ctx.check_for_ui_update(s) });

@@ -1,4 +1,3 @@
-use std::process::{Command, Output};
 use std::str;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -6,11 +5,11 @@ use regex::Regex;
 
 pub struct ExecutableCommand {
     pub id: String,
-    command: String,
-    working_dir: String,
-    period: String,
-    last_run: SystemTime,
-    time_between_runs: u64
+    pub command: String,
+    pub working_dir: String,
+    pub period: String,
+    pub last_run: SystemTime,
+    pub time_between_runs: u64
 }
 
 impl ExecutableCommand {
@@ -25,8 +24,6 @@ impl ExecutableCommand {
         }
     }
 
-    pub fn execute(&self) -> (String, String) { self.convert_output(self.run_command()) }
-
     pub fn ready_to_schedule(&self) -> bool {
         self.time_since_last_run() > self.time_between_runs
     }
@@ -36,36 +33,6 @@ impl ExecutableCommand {
             Ok(dur) => dur.as_secs(),
             Err(_) => 10_000 // Let's just say it's been awhile
         }
-    }
-
-    fn run_command(&self) -> Output {
-        let mut splits = self.command.split(" ").peekable();
-        let cmd: String = splits.next().unwrap().to_string();
-        let mut args : Vec<String> = Vec::new();
-        while splits.peek() != None {
-            args.push(splits.next().unwrap().to_string());
-        }
-
-        Command::new(vec!(self.working_dir.clone(), cmd).join("/"))
-            .current_dir(self.working_dir.clone())
-            .args(args)
-            .output()
-            .expect("failed to execute process")
-    }
-
-    fn convert_output(&self, output: Output) -> (String, String) {
-        let std_text = str::from_utf8(&output.stdout);
-        let err_text = match str::from_utf8(&output.stderr) {
-            Ok(t) => t.to_owned(),
-            Err(_) => String::from("")
-        };
-
-        let output = match std_text {
-            Ok(t) => t.to_owned(),
-            Err(_) => err_text
-        };
-
-        (self.id.clone(), output)
     }
 }
 

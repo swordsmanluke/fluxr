@@ -26,7 +26,7 @@ pub fn initialize_cursive_ctx() -> Cursive {
 }
 
 pub fn inflate_layout(cmd_text: &HashMap<String, String>, layout: &Layout) -> Box<dyn View> {
-    println!("Inflating {}", layout.kind);
+    info!("Inflating {}", layout.kind);
 
     let inflated : Box<dyn View> = match layout.kind.as_ref() {
         "linearlayout" => build_linear_layout(cmd_text, &layout),
@@ -63,9 +63,7 @@ fn build_text_view(cmds: &HashMap<String, String>, layout: &Layout) -> Box<dyn V
 
     let cmd_output = text_for_command(
         layout.task_id.as_ref().unwrap_or(&String::from("")),
-        &cmds,
-        &h_const,
-        &w_const
+        &cmds
     );
 
     trace!("Creating text view for {}", layout.task_id.as_ref().unwrap_or(&String::from("unknown")));
@@ -99,7 +97,7 @@ fn build_linear_layout(cmds: &HashMap<String, String>, layout: &Layout) -> Box<d
     Box::from(ll.resized(w_const, h_const))
 }
 
-fn text_for_command(id: &str, cmds: &HashMap<String, String>, height: &SizeConstraint, width: &SizeConstraint) -> SpannedString<Style> {
+fn text_for_command(id: &str, cmds: &HashMap<String, String>) -> SpannedString<Style> {
     let raw = match cmds.get(id) {
         Some(s) => s,
         None => ""
