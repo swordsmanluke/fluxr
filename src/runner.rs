@@ -53,12 +53,12 @@ impl TaskRunner {
         let command = cmd.command.clone();
         let working_dir = cmd.working_dir.clone();
 
-        thread::spawn(move ||
+        thread::Builder::new().name(cmd.id.clone()).spawn(move ||
             {
                 let mut h = HashMap::new();
                 h.insert(id, convert_output(exec_command(command, working_dir)));
                 trx.send(h).unwrap();
-            })
+            }).unwrap()
     }
 }
 
