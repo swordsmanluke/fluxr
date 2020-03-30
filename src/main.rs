@@ -29,7 +29,7 @@ fn main() {
 
     let (tx, rx) = mpsc::channel();
 
-    let runner = TaskRunner::new(config.tasks, tx);
+    let mut runner = TaskRunner::new(config.tasks, tx);
 
     thread::spawn( move || {
         runner.run_update_loop();
@@ -85,7 +85,7 @@ impl UIContenxt {
 fn init_logging() {
     CombinedLogger::init(
         vec![
-            WriteLogger::new(LevelFilter::Trace, Config::default(), File::create("log/flux.log").unwrap()),
+            WriteLogger::new(LevelFilter::Info, Config::default(), File::create("log/flux.log").unwrap()),
         ]
     ).unwrap();
 }

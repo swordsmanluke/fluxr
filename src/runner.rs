@@ -3,13 +3,16 @@ use std::process::{Command, Output};
 use std::str;
 use std::sync::mpsc::Sender;
 use std::thread;
-use std::thread::JoinHandle;
+use std::thread::{JoinHandle, sleep};
 
 use crate::executable_command::ExecutableCommand;
 use crate::tasks::Task;
+use std::time::{SystemTime, Duration};
+use log::info;
+use std::collections::binary_heap::BinaryHeap;
 
 pub struct TaskRunner {
-    pub commands: Vec<ExecutableCommand>,
+    pub commands: BinaryHeap<ExecutableCommand>,
     tx: Sender<HashMap<String, String>>,
 }
 
@@ -22,17 +25,26 @@ impl TaskRunner {
         TaskRunner { commands: cmds, tx: tx }
     }
 
-    pub fn run_update_loop(&self) {
+    pub fn run_update_loop(&mut self) {
         loop {
-            let mut joinhandles = Vec::new();
-            for cmd in self.scheduled_tasks() {
-                joinhandles.push(self.launch_task_thread(cmd));
+            while self.head().ready_to_schedule() {
+                let cmd = self.commands.pop().unwrap();
+                if cmd.ready_to_schedule() { info!("Running {}!", cmd.id) } else { info!("WTF - running {} anyway?", cmd.id) }
+                self.commands.push(
+                    match  cmd.ready_to_schedule() {
+                        true  => { self.launch_task_thread(&cmd); cmd.with_last_run_at(SystemTime::now()) },
+                        false => { cmd }
+                    });
             };
 
-            for h in joinhandles.into_iter() {
-                h.join().unwrap();
-            }
+            info!("Sleeping for {}ms", self.head().millis_until_next_run());
+            sleep(Duration::from_millis(self.head().millis_until_next_run() as u64));
+            info!("Awake! Top task {} is ready? {} Next run in {}ms", self.head().id, self.head().ready_to_schedule(), self.head().millis_until_next_run());
         }
+    }
+
+    fn head(&self) -> &ExecutableCommand {
+        &self.commands.peek().unwrap()
     }
 
     fn launch_task_thread(&self, cmd: &ExecutableCommand) -> JoinHandle<()> {
@@ -47,10 +59,6 @@ impl TaskRunner {
                 h.insert(id, convert_output(exec_command(command, working_dir)));
                 trx.send(h).unwrap();
             })
-    }
-
-    fn scheduled_tasks(&self) -> Vec<&ExecutableCommand> {
-        self.commands.iter().filter(|t| t.ready_to_schedule()).collect()
     }
 }
 
