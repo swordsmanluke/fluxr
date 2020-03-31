@@ -8,7 +8,7 @@ use cursive::traits::{Resizable, View};
 use cursive::utils::span::SpannedString;
 use cursive::view::SizeConstraint;
 use cursive::views::{DummyView, LinearLayout, TextView};
-use log::{info, trace};
+use log::trace;
 
 use crate::cursive_formatter::format;
 use crate::tasks::Layout;
@@ -26,7 +26,7 @@ pub fn initialize_cursive_ctx() -> Cursive {
 }
 
 pub fn inflate_layout(cmd_text: &HashMap<String, String>, layout: &Layout) -> Box<dyn View> {
-    info!("Inflating {}", layout.kind);
+    trace!("Inflating {}", layout.kind);
 
     let inflated : Box<dyn View> = match layout.kind.as_ref() {
         "linearlayout" => build_linear_layout(cmd_text, &layout),
@@ -67,7 +67,7 @@ fn build_text_view(cmds: &HashMap<String, String>, layout: &Layout) -> Box<dyn V
     );
 
     trace!("Creating text view for {}", layout.task_id.as_ref().unwrap_or(&String::from("unknown")));
-    info!("CMD output {:?}", cmd_output.clone());
+    trace!("CMD output {:?}", cmd_output.clone());
 
     let tv = TextView::new(cmd_output.clone());
 
@@ -103,6 +103,5 @@ fn text_for_command(id: &str, cmds: &HashMap<String, String>) -> SpannedString<S
         None => ""
     };
 
-    info!("Formatting task {} and string {}", id, raw);
     format(raw)
 }

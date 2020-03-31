@@ -9,10 +9,9 @@ use crate::executable_command::ExecutableCommand;
 use crate::tasks::Task;
 use std::time::{SystemTime, Duration};
 use log::info;
-use std::collections::binary_heap::BinaryHeap;
 
 pub struct TaskRunner {
-    pub commands: BinaryHeap<ExecutableCommand>,
+    pub commands: Vec<ExecutableCommand>,
     tx: Sender<HashMap<String, String>>,
 }
 
@@ -25,53 +24,53 @@ impl TaskRunner {
         TaskRunner { commands: cmds, tx: tx }
     }
 
-    pub fn run_update_loop(&mut self) {
-        loop {
-            while self.head().ready_to_schedule() {
-                let cmd = self.commands.pop().unwrap();
-                if cmd.ready_to_schedule() { info!("Running {}!", cmd.id) } else { info!("WTF - running {} anyway?", cmd.id) }
-                self.commands.push(
-                    match  cmd.ready_to_schedule() {
-                        true  => { self.launch_task_thread(&cmd); cmd.with_last_run_at(SystemTime::now()) },
-                        false => { cmd }
-                    });
-            };
+    pub fn run(&mut self) {
+        let handles: Vec<JoinHandle<()>> = self.commands.iter().map(|cmd|
+            self.launch_task_thread(&cmd)
+        ).collect();
 
-            info!("Sleeping for {}ms", self.head().millis_until_next_run());
-            sleep(Duration::from_millis(self.head().millis_until_next_run() as u64));
-            info!("Awake! Top task {} is ready? {} Next run in {}ms", self.head().id, self.head().ready_to_schedule(), self.head().millis_until_next_run());
-        }
+        for h in handles { h.join().unwrap_or_else(|_| {}); }
     }
 
-    fn head(&self) -> &ExecutableCommand {
-        &self.commands.peek().unwrap()
-    }
-
-    fn launch_task_thread(&self, cmd: &ExecutableCommand) -> JoinHandle<()> {
+    fn launch_task_thread(&self, command: &ExecutableCommand) -> JoinHandle<()> {
         let trx = self.tx.clone();
-        let id = cmd.id.clone();
-        let command = cmd.command.clone();
-        let working_dir = cmd.working_dir.clone();
+        let cmd = command.clone();
+        info!("spawn {} thread", cmd.id);
 
         thread::Builder::new().name(cmd.id.clone()).spawn(move ||
             {
-                let mut h = HashMap::new();
-                h.insert(id, convert_output(exec_command(command, working_dir)));
-                trx.send(h).unwrap();
+                loop {
+                    let last_run = SystemTime::now();
+
+                    let mut h = HashMap::new();
+                    h.insert(cmd.id.clone(), convert_output(exec_command(cmd.command.clone(), cmd.working_dir.clone())));
+                    trx.send(h).unwrap();
+
+                    let nap_millis = cmd.millis_until_next_run(last_run.elapsed().unwrap().as_millis() as u64);
+                    let naptime = Duration::from_millis(nap_millis);
+                    info!("{} ran for {:?}", cmd.id, last_run.elapsed().unwrap());
+                    info!("{} sleeping for {}ms", cmd.id, nap_millis);
+                    sleep(naptime);
+                }
             }).unwrap()
     }
 }
 
 fn convert_output(output: Output) -> String {
-    let std_text = str::from_utf8(&output.stdout);
+    let std_text = match str::from_utf8(&output.stdout) {
+        Ok(t) => t.to_owned(),
+        Err(_) => String::from("")
+    };
+
     let err_text = match str::from_utf8(&output.stderr) {
         Ok(t) => t.to_owned(),
         Err(_) => String::from("")
     };
 
-    match std_text {
-        Ok(t) => t.to_owned(),
-        Err(_) => err_text
+    // If we got an error, show that.
+    match err_text.len() {
+        0 => std_text,
+        _ => err_text
     }
 }
 

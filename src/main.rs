@@ -32,7 +32,7 @@ fn main() {
     let mut runner = TaskRunner::new(config.tasks, tx);
 
     thread::spawn( move || {
-        runner.run_update_loop();
+        runner.run();
     });
 
     let uithread = thread::spawn(move || {

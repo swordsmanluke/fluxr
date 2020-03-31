@@ -1,6 +1,5 @@
 use cursive::theme::{BaseColor, Color, Effect, Style};
 use cursive::utils::markup::StyledString;
-use log::info;
 use regex::{Match, Regex};
 
 pub fn format(s: &str) -> StyledString {
@@ -15,7 +14,6 @@ pub fn format(s: &str) -> StyledString {
         if style_to_apply.start() > 0 {
             let content = &s[0..style_to_apply.start()];
             let to_add = StyledString::plain(content);
-            info!("{:?}", to_add);
             styled.append(to_add);
         }
 
@@ -26,7 +24,6 @@ pub fn format(s: &str) -> StyledString {
             let content = &s[head..esc_code_match.start()];
             let style = style_for_vt100_code(style_to_apply.as_str());
             let to_add = StyledString::styled(content, style);
-            info!("{:?}", to_add);
             styled.append(to_add);
 
             head = esc_code_match.end();
@@ -55,7 +52,6 @@ pub fn find_vt100s(s: &str) -> Vec<Match> {
 
 pub fn style_for_vt100_code(esc_code: &str) -> Style {
     let cmd = esc_code.replace("\u{1B}", "");
-    info!("Color cmd: {}", cmd);
     let color_match = Regex::new(r"[\d;]*m").unwrap().find_iter(&cmd).last();
 
     match color_match {
