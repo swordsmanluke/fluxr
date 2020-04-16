@@ -8,7 +8,7 @@ use std::thread::{JoinHandle, sleep};
 use crate::executable_command::ExecutableCommand;
 use crate::tasks::Task;
 use std::time::{SystemTime, Duration};
-use log::info;
+use log::{trace, info};
 
 pub struct TaskRunner {
     pub commands: Vec<ExecutableCommand>,
@@ -49,7 +49,7 @@ impl TaskRunner {
                     let nap_millis = cmd.millis_until_next_run(last_run.elapsed().unwrap().as_millis() as u64);
                     let naptime = Duration::from_millis(nap_millis);
                     info!("{} ran for {:?}", cmd.id, last_run.elapsed().unwrap());
-                    info!("{} sleeping for {}ms", cmd.id, nap_millis);
+                    trace!("{} sleeping for {}ms", cmd.id, nap_millis);
                     sleep(naptime);
                 }
             }).unwrap()
