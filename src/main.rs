@@ -11,15 +11,20 @@ use cursive::Cursive;
 use cursive::event::Event;
 use simplelog::*;
 
-use crate::layout::{inflate_layout, initialize_cursive_ctx};
+use crate::terminal_control::{inflate_layout, initialize_cursive_ctx};
 use crate::runner::TaskRunner;
 use crate::tasks::Layout;
+use std::time::{SystemTime, Duration};
+use std::alloc::System;
 
 mod tasks;
 mod executable_command;
-mod layout;
+mod terminal_control;
 mod cursive_formatter;
 mod runner;
+
+const HALF_A_SECOND: Duration = Duration::new(0, 500_000_00);
+const TEN_SECONDS: Duration = Duration::new(10, 0);
 
 fn main() {
     init_logging();
@@ -50,7 +55,8 @@ fn main() {
 struct UIContenxt {
     layout: Layout,
     rx: Receiver<HashMap<String, String>>,
-    task_output: HashMap<String, String>
+    task_output: HashMap<String, String>,
+    last_refresh: SystemTime,
 }
 
 impl UIContenxt {
@@ -58,18 +64,31 @@ impl UIContenxt {
         UIContenxt {
             layout: layout,
             rx: rx,
-            task_output: HashMap::new()
+            task_output: HashMap::new(),
+            last_refresh: SystemTime::UNIX_EPOCH,
         }
     }
 
     pub fn check_for_ui_update(&mut self, siv: &mut Cursive) -> () {
-        match self.rx.try_recv() {
-            Ok(cmd_text) => {
-                self.update_output(cmd_text);
+        let time_since_last_refresh = self.last_refresh.elapsed().unwrap_or(TEN_SECONDS);
+        if time_since_last_refresh > HALF_A_SECOND {
+            let updates = self.check_for_task_updates();
+            if !updates.is_empty() {
+                self.update_output(updates);
                 self.update_ui(siv);
             }
-            Err(_) => {}
         }
+    }
+
+    fn check_for_task_updates(&mut self) -> HashMap<String, String> {
+        let mut updates = HashMap::new();
+        loop {
+            match self.rx.try_recv() {
+                Ok(cmd_text) => updates.extend(cmd_text),
+                Err(_) => break
+            }
+        }
+        updates
     }
 
     pub fn update_output(&mut self, output: HashMap<String, String>) {

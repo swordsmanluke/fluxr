@@ -13,15 +13,14 @@ use log::trace;
 use crate::cursive_formatter::format;
 use crate::tasks::Layout;
 
-// TODO: Rename this file to something like "cursive_wrapper" or suchlike, since Layout refers
-//       to an object defined in our config files in tasks.rs
+const FPS:u32 = 20; // max=30
 
 pub fn initialize_cursive_ctx() -> Cursive {
     // Creates the cursive root - required for every application.
     let mut siv = Cursive::default();
     let theme = terminal_default_theme(&siv);
     siv.set_theme(theme);
-    siv.set_autorefresh(true);
+    siv.set_fps(FPS);
     siv
 }
 
