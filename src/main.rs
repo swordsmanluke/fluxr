@@ -23,9 +23,6 @@ mod terminal_control;
 mod cursive_formatter;
 mod runner;
 
-const HALF_A_SECOND: Duration = Duration::new(0, 500_000_00);
-const TEN_SECONDS: Duration = Duration::new(10, 0);
-
 fn main() {
     init_logging();
 
@@ -70,8 +67,13 @@ impl UIContenxt {
     }
 
     pub fn check_for_ui_update(&mut self, siv: &mut Cursive) -> () {
-        let time_since_last_refresh = self.last_refresh.elapsed().unwrap_or(TEN_SECONDS);
-        if time_since_last_refresh > HALF_A_SECOND {
+        // TODO: Can I make these into constants somehow?
+        let half_a_second: Duration = Duration::new(0, 500_000_00);
+        let ten_seconds: Duration = Duration::new(10, 0);
+
+        let time_since_last_refresh = self.last_refresh.elapsed().unwrap_or(ten_seconds);
+
+        if time_since_last_refresh > half_a_second {
             let updates = self.check_for_task_updates();
             if !updates.is_empty() {
                 self.update_output(updates);
