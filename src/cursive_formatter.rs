@@ -40,11 +40,6 @@ pub fn format(s: &str) -> StyledString {
     styled
 }
 
-pub fn strip_vt100(s: &str) -> String {
-    let vt100_esc_sequences = Regex::new(r"((\u001b\[|\u009b)[\u0030-\u003f]*[\u0020-\u002f]*[\u0040-\u007e])+").unwrap();
-    String::from(vt100_esc_sequences.replace_all(s, ""))
-}
-
 pub fn find_vt100s(s: &str) -> Vec<Match> {
     let vt100_regex = Regex::new(r"((\u001b\[|\u009b)[\u0030-\u003f]*[\u0020-\u002f]*[\u0040-\u007e])+").unwrap();
     vt100_regex.find_iter(s).collect()
@@ -60,26 +55,20 @@ pub fn style_for_vt100_code(esc_code: &str) -> Style {
     }
 }
 
-// enum TextMode {
-//     LO_COLOR,
-//     HI_COLOR
-// }
-
 pub fn style_for_color_code(clr_code: &str) -> Style {
     let cmds: Vec<String> = clr_code.split(";").map(|c| c.to_string()).collect();
     let mut style = Style::none();
 
-    // let mut mode = TextMode::LO_COLOR;
 
     for color_cmd in cmds.iter().map(|c| c.parse::<u32>().unwrap()) {
         let next_style: Style = match color_cmd {
             1 => { style.combine(Effect::Bold); style }
             4 => { style.combine(Effect::Underline); style }
-            30..=37 => { /*mode = LO_COLOR;*/ Style::from(Color::Dark(BaseColor::from((color_cmd - 30) as u8))) },
-            40..=47 => { /*mode = LO_COLOR;*/ Style::from(Color::Dark(BaseColor::from((color_cmd - 40) as u8))) },
-            38 => { /*mode = HI_COLOR;*/ style }
-            90..=97 => { /*mode = LO_COLOR;*/ Style::from(Color::Light(BaseColor::from((color_cmd - 90) as u8))).combine(Effect::Bold) },
-            100..=107 => { /*mode = LO_COLOR;*/ Style::from(Color::Light(BaseColor::from((color_cmd - 100) as u8))).combine(Effect::Bold) },
+            30..=37 => { Style::from(Color::Dark(BaseColor::from((color_cmd - 30) as u8))) },
+            40..=47 => { Style::from(Color::Dark(BaseColor::from((color_cmd - 40) as u8))) },
+            38 => { style }
+            90..=97 => { Style::from(Color::Light(BaseColor::from((color_cmd - 90) as u8))).combine(Effect::Bold) },
+            100..=107 => { Style::from(Color::Light(BaseColor::from((color_cmd - 100) as u8))).combine(Effect::Bold) },
             _ => style
         };
 
@@ -106,21 +95,6 @@ mod tests {
         ss.append(StyledString::styled("S", Style::from(Color::Light(BaseColor::Cyan)).combine(Effect::Bold)));
         ss.append(StyledString::plain("T"));
         ss
-    }
-
-    /***
-    * strip_vt100
-    ***/
-    #[test]
-    fn strip_vt100_removes_escape_codes() {
-        let strp = strip_vt100(&complex_string());
-        assert_eq!(strp, "TEST")
-    }
-
-    #[test]
-    fn strip_vt100_leaves_basic_strings_alone() {
-        let strp = strip_vt100(&simple_string());
-        assert_eq!(strp, "simple")
     }
 
     /***

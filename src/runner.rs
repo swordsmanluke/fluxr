@@ -48,7 +48,7 @@ impl TaskRunner {
 
                     let nap_millis = cmd.millis_until_next_run(last_run.elapsed().unwrap().as_millis() as u64);
                     let naptime = Duration::from_millis(nap_millis);
-                    info!("{} ran for {:?}", cmd.id, last_run.elapsed().unwrap());
+                    info!("{} ran for {:.2?}", cmd.id, last_run.elapsed().unwrap());
                     trace!("{} sleeping for {}ms", cmd.id, nap_millis);
                     sleep(naptime);
                 }
@@ -75,14 +75,11 @@ fn convert_output(output: Output) -> String {
 }
 
 fn exec_command(command: String, working_dir: String) -> Output {
-    let mut splits = command.split(" ").peekable();
-    let cmd: String = splits.next().unwrap().to_string();
-    let mut args : Vec<String> = Vec::new();
-    while splits.peek() != None {
-        args.push(splits.next().unwrap().to_string());
-    }
+    let mut parts = command.trim().split_whitespace();
+    let cmd = parts.next().unwrap();
+    let args = parts;
 
-    Command::new(vec!(working_dir.clone(), cmd).join("/"))
+    Command::new(vec!(working_dir.clone(), cmd.to_string()).join("/"))
         .current_dir(working_dir.clone())
         .args(args)
         .output()

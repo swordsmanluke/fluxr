@@ -8,14 +8,17 @@ use std::sync::mpsc::Receiver;
 use std::thread;
 
 use cursive::Cursive;
-use cursive::event::Event;
 use simplelog::*;
 
 use crate::terminal_control::{inflate_layout, initialize_cursive_ctx};
 use crate::runner::TaskRunner;
 use crate::tasks::Layout;
-use std::time::{SystemTime, Duration};
-use std::alloc::System;
+use std::thread::JoinHandle;
+use cursive::views::TextContent;
+use crate::cursive_formatter::format;
+use std::time::Instant;
+use log::info;
+
 
 mod tasks;
 mod executable_command;
@@ -37,69 +40,80 @@ fn main() {
         runner.run();
     });
 
-    let uithread = thread::spawn(move || {
-        println!("Setting up siv!");
-        let mut siv = initialize_cursive_ctx();
-        let mut ctx = UIContenxt::new(layout, rx);
-        siv.add_global_callback(Event::Refresh, move |s| { ctx.check_for_ui_update(s) });
-
-        siv.run();
-    });
+    let uithread = launch_siv(layout, rx);
 
     uithread.join().unwrap_or({});
 }
 
+fn launch_siv(layout: Layout, rx: Receiver<HashMap<String, String>>) -> JoinHandle<()> {
+    thread::spawn(move || {
+        println!("Setting up siv!");
+        let mut siv = initialize_cursive_ctx();
+        let mut ctx = UIContenxt::new(layout, rx);
+        ctx.create_ui(&mut siv);
+        thread::spawn(move || {ctx.run_ui_loop() });
+        siv.run();
+    })
+}
+
 struct UIContenxt {
     layout: Layout,
+    windows: HashMap<String, TextContent>,
     rx: Receiver<HashMap<String, String>>,
-    task_output: HashMap<String, String>,
-    last_refresh: SystemTime,
+    updates: f64,
+    elapsed: u128
 }
 
 impl UIContenxt {
     pub fn new(layout: Layout, rx: Receiver<HashMap<String, String>>) -> UIContenxt {
         UIContenxt {
             layout: layout,
+            windows: HashMap::new(),
             rx: rx,
-            task_output: HashMap::new(),
-            last_refresh: SystemTime::UNIX_EPOCH,
+            updates: 0.0,
+            elapsed: 0
         }
     }
 
-    pub fn check_for_ui_update(&mut self, siv: &mut Cursive) -> () {
-        // TODO: Can I make these into constants somehow?
-        let half_a_second: Duration = Duration::new(0, 500_000_00);
-        let ten_seconds: Duration = Duration::new(10, 0);
-
-        let time_since_last_refresh = self.last_refresh.elapsed().unwrap_or(ten_seconds);
-
-        if time_since_last_refresh > half_a_second {
-            let updates = self.check_for_task_updates();
-            if !updates.is_empty() {
-                self.update_output(updates);
-                self.update_ui(siv);
-            }
-        }
-    }
-
-    fn check_for_task_updates(&mut self) -> HashMap<String, String> {
-        let mut updates = HashMap::new();
+    pub fn run_ui_loop(&mut self) -> (){
+        let mut last_log = Instant::now();
         loop {
-            match self.rx.try_recv() {
-                Ok(cmd_text) => updates.extend(cmd_text),
-                Err(_) => break
+            self.updates += 1.0;
+            let start = Instant::now();
+            self.wait_for_updates();
+            self.elapsed += start.elapsed().as_millis();
+
+            if last_log.elapsed().as_secs() > 10 {
+                info!("Refreshes per second = {:.2}", self.updates / ((self.elapsed as f64) / 1000.0));
+                last_log = Instant::now()
             }
         }
-        updates
     }
 
-    pub fn update_output(&mut self, output: HashMap<String, String>) {
-        self.task_output.extend(output);
+    fn wait_for_updates(&mut self) {
+        match self.rx.recv() {
+            Ok(cmd_text) => {
+                self.update_output(&cmd_text);
+            },
+            Err(_) => {}
+        }
     }
 
-    fn update_ui(&mut self, siv: &mut Cursive) -> () {
+    pub fn update_output(&mut self, output: &HashMap<String, String>) {
+        for (task_id, content) in output {
+            match self.windows.get(task_id.as_str()) {
+                None => {}
+                Some(text_content) => {
+                    text_content.set_content(format(content.as_str()))
+                }
+            }
+        }
+    }
+
+    fn create_ui(&mut self, siv: &mut Cursive) -> () {
         siv.pop_layer();
-        siv.add_layer(inflate_layout(&self.task_output, &self.layout));
+        let layout = inflate_layout( &self.layout, &mut self.windows);
+        siv.add_layer(layout);
     }
 }
 
