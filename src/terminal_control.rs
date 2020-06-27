@@ -11,14 +11,12 @@ use log::trace;
 
 use crate::tasks::Layout;
 
-const FPS:u32 = 20; // max=30
-
 pub fn initialize_cursive_ctx() -> Cursive {
     // Creates the cursive root - required for every application.
     let mut siv = Cursive::crossterm().unwrap();
     let theme = terminal_default_theme(&siv);
     siv.set_theme(theme);
-    siv.set_fps(FPS);
+    // siv.set_fps(FPS);
     siv
 }
 

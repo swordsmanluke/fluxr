@@ -48,11 +48,9 @@ fn main() {
 fn launch_siv(layout: Layout, rx: Receiver<HashMap<String, String>>) -> JoinHandle<()> {
     thread::spawn(move || {
         println!("Setting up siv!");
-        let mut siv = initialize_cursive_ctx();
-        let mut ctx = UIContext::new(layout, rx);
-        ctx.create_ui(&mut siv);
-        thread::spawn(move || { ctx.run_ui_loop() });
-        siv.run();
+        let siv = initialize_cursive_ctx();
+        let mut ctx = UIContext::new(layout, rx, siv);
+        ctx.run_ui_loop();
     })
 }
 
@@ -60,16 +58,18 @@ struct UIContext {
     layout: Layout,
     windows: HashMap<String, TextContent>,
     rx: Receiver<HashMap<String, String>>,
+    siv: Cursive,
     updates: f64,
     elapsed: u128
 }
 
 impl UIContext {
-    pub fn new(layout: Layout, rx: Receiver<HashMap<String, String>>) -> UIContext {
+    pub fn new(layout: Layout, rx: Receiver<HashMap<String, String>>, siv: Cursive) -> UIContext {
         UIContext {
             layout: layout,
             windows: HashMap::new(),
             rx: rx,
+            siv: siv,
             updates: 0.0,
             elapsed: 0
         }
@@ -77,8 +77,9 @@ impl UIContext {
 
     pub fn run_ui_loop(&mut self) -> (){
         let mut last_log = Instant::now();
+        self.create_ui();
         loop {
-            self.updates += 1.0;
+            self.siv.step();
             let start = Instant::now();
             self.wait_for_updates();
             self.elapsed += start.elapsed().as_millis();
@@ -94,6 +95,7 @@ impl UIContext {
         match self.rx.recv() {
             Ok(cmd_text) => {
                 self.update_output(&cmd_text);
+                self.siv.refresh();
             },
             Err(_) => {}
         }
@@ -104,16 +106,17 @@ impl UIContext {
             match self.windows.get(task_id.as_str()) {
                 None => {}
                 Some(text_content) => {
+                    self.updates += 1.0;
                     text_content.set_content(format(content.as_str()))
                 }
             }
         }
     }
 
-    fn create_ui(&mut self, siv: &mut Cursive) -> () {
-        siv.pop_layer();
+    fn create_ui(&mut self) -> () {
+        self.siv.pop_layer();
         let layout = inflate_layout( &self.layout, &mut self.windows);
-        siv.add_layer(layout);
+        self.siv.add_layer(layout);
     }
 }
 
