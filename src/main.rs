@@ -49,14 +49,14 @@ fn launch_siv(layout: Layout, rx: Receiver<HashMap<String, String>>) -> JoinHand
     thread::spawn(move || {
         println!("Setting up siv!");
         let mut siv = initialize_cursive_ctx();
-        let mut ctx = UIContenxt::new(layout, rx);
+        let mut ctx = UIContext::new(layout, rx);
         ctx.create_ui(&mut siv);
-        thread::spawn(move || {ctx.run_ui_loop() });
+        thread::spawn(move || { ctx.run_ui_loop() });
         siv.run();
     })
 }
 
-struct UIContenxt {
+struct UIContext {
     layout: Layout,
     windows: HashMap<String, TextContent>,
     rx: Receiver<HashMap<String, String>>,
@@ -64,9 +64,9 @@ struct UIContenxt {
     elapsed: u128
 }
 
-impl UIContenxt {
-    pub fn new(layout: Layout, rx: Receiver<HashMap<String, String>>) -> UIContenxt {
-        UIContenxt {
+impl UIContext {
+    pub fn new(layout: Layout, rx: Receiver<HashMap<String, String>>) -> UIContext {
+        UIContext {
             layout: layout,
             windows: HashMap::new(),
             rx: rx,

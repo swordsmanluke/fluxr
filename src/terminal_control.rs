@@ -80,7 +80,7 @@ fn build_linear_layout(layout: &Layout, windows: &mut HashMap<String, TextConten
     for child in layout.children.as_ref().unwrap_or(&Vec::new()) {
         let child= inflate_layout(&child, windows);
         ll.add_child(child);
-        ll.add_child(DummyView.fixed_width(1).fixed_height(1));
+        //ll.add_child(DummyView.fixed_width(1).fixed_height(1));
     }
 
     let h_const = match layout.height {
