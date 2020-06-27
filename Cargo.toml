@@ -5,11 +5,16 @@ authors = ["Lucas Taylor <lucas@perfectlunacy.com>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
+debug = true
 [dependencies]
+# Regex for parsing terminal output
 regex = "1"
-cursive = "0.14.0"
+# Terminal control library
+cursive = { version = "0.15", features = ["crossterm-backend"], default-features = false }
+# Logging
 log = "0.4"
 simplelog = "^0.7.4"
+# Toml Parsing
 toml = "0.5.6"
+# (de)Serialization TODO: Check out https://github.com/not-fl3/nanoserde/ - lighter weight alt.
 serde = { version = "1.0", features = ["derive"] }
