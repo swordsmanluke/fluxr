@@ -6,7 +6,7 @@ use cursive::{Cursive, CursiveExt};
 use cursive::theme::{Color, PaletteColor, Theme};
 use cursive::traits::{Resizable, View};
 use cursive::view::SizeConstraint;
-use cursive::views::{DummyView, LinearLayout, TextView, TextContent, ResizedView};
+use cursive::views::{LinearLayout, TextView, TextContent, ResizedView};
 use log::trace;
 
 use crate::tasks::Layout;
