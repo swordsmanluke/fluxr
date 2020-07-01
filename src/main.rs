@@ -1,3 +1,5 @@
+mod widgets;
+
 extern crate regex;
 extern crate simplelog;
 
@@ -22,6 +24,9 @@ mod terminal_control;
 mod cursive_formatter;
 mod runner;
 mod ui_context;
+mod crossterm_backend;
+
+pub type TaskId = String;
 
 fn main() {
     init_logging();
