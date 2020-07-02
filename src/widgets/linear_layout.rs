@@ -18,11 +18,15 @@ impl LinearLayout {
 
     fn render_vertical(&self) -> String {
         let lines: Vec<String> = self.children.iter().map( |c| c.render()).collect();
-        lines.join("\n")
+        lines.iter().
+            take(self.height()).
+            map(|c| c.to_string()).
+            collect::<Vec<String>>().
+            join("\n")
     }
 
     fn render_horizontal(&self) -> String {
-        unimplemented!()
+        self.render_lines().join("\n")
     }
 
     fn update_child_dims(orientation: Orientation, childrens_desired_dims: (usize, usize), child_dims: Dimensions) -> (usize, usize) {
@@ -91,6 +95,28 @@ impl View for LinearLayout {
             Orientation::VERTICAL => self.render_vertical(),
             Orientation::HORIZONTAL => self.render_horizontal()
         }
+    }
+
+    fn render_lines(&self) -> Vec<String> {
+        let mut lines:Vec<String> = vec![];
+        for _ in 0..self.height(){
+            lines.push(String::from(""))
+        }
+
+        for c in & self.children {
+            for i in 0..self.height() {
+                let line = match c.render_lines().get(i) {
+                    None => String::from(""),
+                    Some(l) => l.to_string()
+                };
+
+                // Right pad with spaces to clear out any previous, longer text.
+                let spcs_req= (self.width() - line.len());
+                lines[i] += &*format!("{:width$}", line, width = spcs_req);
+            }
+        };
+
+        lines
     }
 }
 
@@ -175,11 +201,31 @@ mod tests {
     }
 
     #[test]
-    fn rendering_works() {
+    fn vert_rendering_works() {
         let mut ll = vert_ll_with_wrap_content();
         ll.add_child(Box::new(fixed_size_text_widget()));
         ll.inflate(&Dimensions::new(Dim::WrapContent, Dim::WrapContent));
 
-        assert_eq!(ll.render(), "This \nwith ".to_string());
+        assert_eq!("This is so\nwith multi".to_string(), ll.render());
+    }
+
+    #[test]
+    fn vert_rendering_works_with_multiple_children() {
+        let mut ll = vert_ll_with_wrap_content();
+        ll.add_child(Box::new(fixed_size_text_widget()));
+        ll.add_child(Box::new(fixed_size_text_widget()));
+        ll.inflate(&Dimensions::new(Dim::WrapContent, Dim::WrapContent));
+
+        assert_eq!("This is so\nwith multi\nThis is so\nwith multi".to_string(), ll.render());
+    }
+
+    #[test]
+    fn horz_rendering_works_with_multiple_children() {
+        let mut ll = horz_ll_with_wrap_content();
+        ll.add_child(Box::new(fixed_size_text_widget()));
+        ll.add_child(Box::new(fixed_size_text_widget()));
+        ll.inflate(&Dimensions::new(Dim::WrapContent, Dim::WrapContent));
+
+        assert_eq!("This is soThis is so\nwith multiwith multi".to_string(), ll.render());
     }
 }

@@ -1,4 +1,4 @@
-use crate::widgets::{View, TextWidget, Dim, Dimensions, calc_view_size};
+use crate::widgets::{View, TextWidget, Dim, Dimensions, calc_view_size, DumbFormatter};
 use std::iter::empty;
 use std::cmp::min;
 
@@ -13,7 +13,8 @@ impl TextWidget {
                 height_constraint: height,
                 width: 0,
                 height: 0
-            }
+            },
+            formatter: Box::new(DumbFormatter{})
         }
     }
 }
@@ -59,8 +60,19 @@ impl View for TextWidget {
 
     fn height(&self) -> usize { self.dims.height }
 
-    // TODO: How's formatting this for the backed term library work?
-    fn render(&self) -> String { return self.raw_text.clone() }
+    fn render(&self) -> String {
+        self.raw_text.
+            split("\n").take(self.height()). // First n Lines
+            map(|c| self.formatter.format(c.to_string(), self.width())). // Format them
+            collect::<Vec<String>>().join("\n")     // Convert back into a single string
+    }
+
+    fn render_lines(&self) -> Vec<String> {
+        self.render()
+            .split("\n")
+            .map(|s| s.to_string())
+            .collect()
+    }
 }
 
 #[cfg(test)]
@@ -120,13 +132,15 @@ mod tests {
     fn renders_all_text_within_wrap_content() {
         let mut tw = wrap_content_text_widget();
         tw.raw_text = String::from("some\ntext");
-        assert_eq!(tw.render(), String::from("some\ntext"));
+        tw.inflate(&Dimensions::new(Dim::WrapContent, Dim::WrapContent));
+        assert_eq!(String::from("some\ntext"), tw.render());
     }
 
     #[test]
     fn renders_partial_text_within_fixed_size() {
         let mut tw = fixed_size_text_widget();
         tw.raw_text = String::from("some really long text\nand another really long line\nthis line doesn't show up at all");
-        assert_eq!(tw.render(), String::from("some reall\nand anothe"));
+        tw.inflate(&Dimensions::new(Dim::WrapContent, Dim::WrapContent));
+        assert_eq!(String::from("some reall\nand anothe"), tw.render());
     }
 }
