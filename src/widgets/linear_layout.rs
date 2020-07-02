@@ -21,15 +21,31 @@ impl LinearLayout {
         lines.join("\n")
     }
 
-
     fn render_horizontal(&self) -> String {
         unimplemented!()
+    }
+
+    fn update_child_dims(orientation: Orientation, childrens_desired_dims: (usize, usize), child_dims: Dimensions) -> (usize, usize) {
+        // Sum our children in the direction we are stacking them.
+        // Capture the maximum in the direction we are stretching.
+        // e.g. for Vertical, we stack by height, so sum those.
+        //      ...then stretch sideways to the max child width.
+        match orientation {
+            Orientation::HORIZONTAL => {
+                (childrens_desired_dims.0 + child_dims.width,
+                 max(childrens_desired_dims.1, child_dims.height))
+            },
+            Orientation::VERTICAL => {
+                (max(childrens_desired_dims.0, child_dims.width),
+                 childrens_desired_dims.1 + child_dims.height)
+            }
+        }
     }
 }
 
 impl View for LinearLayout {
     fn inflate(&mut self, parent_dimensions: &Dimensions) -> Dimensions {
-        let mut max_child_dims = (0, 0);
+        let mut childrens_desired_dims = (0, 0);
         let most_restrictive_width = min(self.dims.width_constraint, parent_dimensions.width_constraint);
         let most_restrictive_height = min(self.dims.height_constraint, parent_dimensions.height_constraint);
 
@@ -41,21 +57,20 @@ impl View for LinearLayout {
         };
 
         for mut v in &mut self.children {
-            let new_dims = v.inflate(&self.dims);
-            max_child_dims.0 = max(max_child_dims.0, new_dims.width);
-            max_child_dims.1 = max(max_child_dims.1, new_dims.height);
+            let child_dims = v.inflate(&self.dims);
+            childrens_desired_dims = LinearLayout::update_child_dims(self.orientation, childrens_desired_dims, child_dims);
         }
 
         match self.dims.width_constraint {
             Dim::WrapContent => {
-                self.dims.width = max_child_dims.0;
+                self.dims.width = childrens_desired_dims.0;
             }
             _ => {}
         };
 
         match self.dims.height_constraint {
             Dim::WrapContent => {
-                self.dims.height = max_child_dims.1;
+                self.dims.height = childrens_desired_dims.1;
             }
             _ => {}
         };
@@ -78,6 +93,7 @@ impl View for LinearLayout {
         }
     }
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -115,19 +131,53 @@ mod tests {
 
     #[test]
     fn when_wrapping_content_takes_size_from_children() {
-        let mut tw = fixed_size_text_widget();
         let mut ll = vert_ll_with_wrap_content();
-        ll.add_child(Box::new(tw));
+        ll.add_child(Box::new(fixed_size_text_widget()));
         ll.inflate(&Dimensions::new(Dim::WrapContent, Dim::WrapContent));
         assert_eq!(10, ll.width());
         assert_eq!(2, ll.height());
     }
 
     #[test]
-    fn rendering_works() {
-        let mut tw = fixed_size_text_widget();
+    fn when_vert_wrapping_content_takes_horz_size_from_largest_child() {
         let mut ll = vert_ll_with_wrap_content();
-        ll.add_child(Box::new(tw));
+        ll.add_child(Box::new(fixed_size_text_widget()));
+        ll.add_child(Box::new(wrap_content_text_widget()));
+        ll.inflate(&Dimensions::new(Dim::WrapContent, Dim::WrapContent));
+        assert_eq!(ll.width(), 22);
+    }
+
+    #[test]
+    fn when_vert_wrapping_content_takes_vert_size_from_summed_children() {
+        let mut ll = vert_ll_with_wrap_content();
+        ll.add_child(Box::new(fixed_size_text_widget()));
+        ll.add_child(Box::new(fixed_size_text_widget()));
+        ll.inflate(&Dimensions::new(Dim::WrapContent, Dim::WrapContent));
+        assert_eq!(ll.height(), 4);
+    }
+
+    #[test]
+    fn when_horz_wrapping_content_takes_horz_size_from_summed_children() {
+        let mut ll = horz_ll_with_wrap_content();
+        ll.add_child(Box::new(fixed_size_text_widget()));
+        ll.add_child(Box::new(fixed_size_text_widget()));
+        ll.inflate(&Dimensions::new(Dim::WrapContent, Dim::WrapContent));
+        assert_eq!(ll.width(), 20);
+    }
+
+    #[test]
+    fn when_horz_wrapping_content_takes_vert_size_from_tallest_child() {
+        let mut ll = horz_ll_with_wrap_content();
+        ll.add_child(Box::new(fixed_size_text_widget()));
+        ll.add_child(Box::new(wrap_content_text_widget()));
+        ll.inflate(&Dimensions::new(Dim::WrapContent, Dim::WrapContent));
+        assert_eq!(ll.height(), 3);
+    }
+
+    #[test]
+    fn rendering_works() {
+        let mut ll = vert_ll_with_wrap_content();
+        ll.add_child(Box::new(fixed_size_text_widget()));
         ll.inflate(&Dimensions::new(Dim::WrapContent, Dim::WrapContent));
 
         assert_eq!(ll.render(), "This \nwith ".to_string());

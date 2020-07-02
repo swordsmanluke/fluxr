@@ -87,6 +87,7 @@ pub trait TextFormatter<T> {
     fn format(s: String) -> T;
 }
 
+#[derive(Copy, Clone)]
 pub enum Orientation {
     HORIZONTAL,
     VERTICAL
