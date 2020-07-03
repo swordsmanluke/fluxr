@@ -1,64 +1,65 @@
-use crate::widgets::{View, TextWidget, Dim, Dimensions, calc_view_size, DumbFormatter};
-use std::iter::empty;
+use crate::widgets::{View, TextView, Dim, Dimensions, DumbFormatter, desired_size, Vt100Formatter, CharDims};
 use std::cmp::min;
+use log::info;
 
-impl TextWidget {
-    pub fn new(task_id: String, width: Dim, height: Dim) -> TextWidget {
-        TextWidget {
-            task_id,
+impl TextView {
+    pub fn new(width: Dim, height: Dim) -> TextView {
+        TextView {
             raw_text: "".to_string(),
-            dirty: false,
             dims: Dimensions {
                 width_constraint: width,
                 height_constraint: height,
-                width: 0,
-                height: 0
+                size: (0, 0)
             },
-            formatter: Box::new(DumbFormatter{})
+            formatter: Box::new(Vt100Formatter{})
         }
+    }
+
+    pub fn update_content(&mut self, s: String) -> () {
+        self.raw_text = s;
     }
 }
 
-impl View for TextWidget {
-    fn inflate(&mut self, parent_dimensions: &Dimensions) -> Dimensions {
-        let most_restrictive_width = min(self.dims.width_constraint, parent_dimensions.width_constraint);
-        let most_restrictive_height = min(self.dims.height_constraint, parent_dimensions.height_constraint);
-
+impl View for TextView {
+    fn inflate(&mut self, parent_dimensions: &CharDims) -> CharDims {
         let desired_width_constraint = Dim::UpTo(self.raw_text.split("\n").map(|c| c.len()).max().unwrap_or(0));
         let desired_height_constraint  = Dim::UpTo(self.raw_text.split("\n").count());
+
+        let most_restrictive_width = min(desired_width_constraint, min(self.dims.width_constraint, Dim::Fixed(parent_dimensions.0)));
+        let most_restrictive_height= min(desired_height_constraint,  min(self.dims.height_constraint, Dim::Fixed(parent_dimensions.1)));
 
         self.dims = Dimensions{
             width_constraint: most_restrictive_width,
             height_constraint: most_restrictive_height,
-            width: calc_view_size(&most_restrictive_width, &desired_width_constraint),
-            height: calc_view_size(&most_restrictive_height, &desired_height_constraint),
+            size: (desired_size(&most_restrictive_width),
+                   desired_size(&most_restrictive_height)),
         };
 
         match self.dims.width_constraint {
             Dim::WrapContent => {
-                self.dims.width = self.raw_text.split("\n").map(|s| s.len()).max().unwrap_or(0);
+                self.dims.size.0 = self.raw_text.split("\n").map(|s| s.len()).max().unwrap_or(0);
             }
             _ => {}
         };
 
         match self.dims.height_constraint {
-            // TODO: This should be a little smarter and consider wrapped lines, but that's a "tomorrow" feature
+            // TODO: This could be a little smarter and consider wrapped lines, but that's a "tomorrow" feature
             Dim::WrapContent => {
-                self.dims.height = self.raw_text.split("\n").count();
+                self.dims.size.1 = self.raw_text.split("\n").count() + 1;
             }
             _ => {}
         };
 
-        self.dims.clone()
+        self.dims.size.clone()
     }
 
     fn constraints(&self) -> (Dim, Dim) {
         (self.dims.width_constraint.clone(), self.dims.height_constraint.clone())
     }
 
-    fn width(&self) -> usize { self.dims.width }
+    fn width(&self) -> usize { self.dims.size.0 }
 
-    fn height(&self) -> usize { self.dims.height }
+    fn height(&self) -> usize { self.dims.size.1 }
 
     fn render(&self) -> String {
         self.raw_text.
@@ -79,12 +80,12 @@ impl View for TextWidget {
 mod tests {
     use super::*;
 
-    fn fixed_size_text_widget() -> TextWidget {
-        TextWidget::new("task".to_string(), Dim::Fixed(10), Dim::Fixed(2))
+    fn fixed_size_text_widget() -> TextView {
+        TextView::new(Dim::Fixed(10), Dim::Fixed(2))
     }
 
-    fn wrap_content_text_widget() -> TextWidget {
-        TextWidget::new("task".to_string(), Dim::WrapContent, Dim::WrapContent)
+    fn wrap_content_text_widget() -> TextView {
+        TextView::new(Dim::WrapContent, Dim::WrapContent)
     }
 
     #[test]
@@ -96,7 +97,7 @@ mod tests {
     fn inflation_of_fixed_width_works_with_wrap_content_parent() {
         let mut tw = fixed_size_text_widget();
         tw.raw_text = String::from("line 1 is pretty long\nline 2 is shorter.\nline 3 is also fairly long.");
-        tw.inflate(&Dimensions::new(Dim::WrapContent, Dim::WrapContent));
+        tw.inflate(&(100, 100));
         assert_eq!(10, tw.width());
         assert_eq!(2, tw.height());
     }
@@ -105,7 +106,7 @@ mod tests {
     fn inflation_of_fixed_width_works_shrinks_to_fit_parent() {
         let mut tw = fixed_size_text_widget();
         tw.raw_text = String::from("line 1 is pretty long\nline 2 is shorter.\nline 3 is also fairly long.");
-        tw.inflate(&Dimensions::new(Dim::Fixed(5), Dim::WrapContent));
+        tw.inflate(&(5, 100));
         assert_eq!(5, tw.width());
         assert_eq!(2, tw.height());
     }
@@ -114,7 +115,7 @@ mod tests {
     fn inflation_of_wrap_content_width_expands_to_line_length() {
         let mut tw = wrap_content_text_widget();
         tw.raw_text = String::from("line 1 is pretty long\nline 2 is shorter.");
-        tw.inflate(&Dimensions::new(Dim::WrapContent, Dim::WrapContent));
+        tw.inflate(&(100, 100));
         assert_eq!("line 1 is pretty long".len(), tw.width());
         assert_eq!(2, tw.height());
     }
@@ -123,7 +124,7 @@ mod tests {
     fn inflation_of_wrap_content_width_shrinks_to_fixed_parent_dims() {
         let mut tw = wrap_content_text_widget();
         tw.raw_text = String::from("line 1 is pretty long\nline 2 is shorter.\nline 3 is also fairly long.");
-        tw.inflate(&Dimensions::new(Dim::Fixed(3), Dim::Fixed(2)));
+        tw.inflate(&(3, 2));
         assert_eq!(3, tw.width());
         assert_eq!(2, tw.height());
     }
@@ -132,7 +133,7 @@ mod tests {
     fn renders_all_text_within_wrap_content() {
         let mut tw = wrap_content_text_widget();
         tw.raw_text = String::from("some\ntext");
-        tw.inflate(&Dimensions::new(Dim::WrapContent, Dim::WrapContent));
+        tw.inflate(&(100, 100));
         assert_eq!(String::from("some\ntext"), tw.render());
     }
 
@@ -140,7 +141,7 @@ mod tests {
     fn renders_partial_text_within_fixed_size() {
         let mut tw = fixed_size_text_widget();
         tw.raw_text = String::from("some really long text\nand another really long line\nthis line doesn't show up at all");
-        tw.inflate(&Dimensions::new(Dim::WrapContent, Dim::WrapContent));
+        tw.inflate(&(100, 100));
         assert_eq!(String::from("some reall\nand anothe"), tw.render());
     }
 }

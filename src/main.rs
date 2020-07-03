@@ -2,6 +2,7 @@ mod widgets;
 
 extern crate regex;
 extern crate simplelog;
+extern crate crossterm;
 
 use std::collections::HashMap;
 use std::fs::File;
@@ -10,12 +11,14 @@ use std::sync::mpsc::Receiver;
 use std::thread;
 
 use simplelog::*;
+use log::info;
 
 use crate::terminal_control::initialize_cursive_ctx;
 use crate::runner::TaskRunner;
 use crate::tasks::Layout;
 use std::thread::JoinHandle;
 use ui_context::UIContext;
+use crate::crossterm_backend::CrossTermUiContext;
 
 
 mod tasks;
@@ -42,13 +45,25 @@ fn main() {
         runner.run();
     });
 
-    // Use the Cursive backend
-    launch_siv(layout, rx).join().unwrap_or({});
+    if true {
+        launch_crossterm(layout, rx).join().unwrap_or({});
+    } else {
+        // Use the Cursive backend
+        launch_siv(layout, rx).join().unwrap_or({});
+    }
+}
+
+fn launch_crossterm(layout: Layout, rx: Receiver<HashMap<String, String>>) -> JoinHandle<()> {
+    thread::spawn(move || {
+        info!("Setting up crossterm!");
+        let mut ctx = CrossTermUiContext::new(layout, rx);
+        ctx.run_ui_loop();
+    })
 }
 
 fn launch_siv(layout: Layout, rx: Receiver<HashMap<String, String>>) -> JoinHandle<()> {
     thread::spawn(move || {
-        println!("Setting up siv!");
+        info!("Setting up siv!");
         let siv = initialize_cursive_ctx();
         let mut ctx = UIContext::new(layout, rx, siv);
         ctx.run_ui_loop();

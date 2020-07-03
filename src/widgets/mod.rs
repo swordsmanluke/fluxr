@@ -1,7 +1,10 @@
 use std::cmp::{Ordering, min};
+use std::rc::Rc;
+use std::cell::RefCell;
+use crate::crossterm_backend::find_vt100s;
 
 mod linear_layout;
-mod text_widget;
+mod text_view;
 
 /***
 Dim: Represents a constraint on layout.
@@ -42,7 +45,7 @@ impl Ord for Dim {
 View: A trait representing a render-able text widget.
  */
 pub trait View {
-    fn inflate(&mut self, parent_size: &Dimensions) -> Dimensions;
+    fn inflate(&mut self, parent_size: &CharDims) -> CharDims;
     fn constraints(&self) -> (Dim, Dim);
     fn width(&self) -> usize;
     fn height(&self) -> usize;
@@ -51,12 +54,10 @@ pub trait View {
 }
 
 /***
-TextWidget: A simple text container. Throw a String at it.
+TextView: A simple text container. Throw a String at it.
  */
-pub struct TextWidget {
-    task_id: String,
+pub struct TextView {
     raw_text: String,
-    dirty: bool,
     dims: Dimensions,
     formatter: Box<dyn TextFormatter>
 }
@@ -74,14 +75,53 @@ struct DumbFormatter{}
 
 impl TextFormatter for DumbFormatter {
     fn format(&self, s: String, n: usize) -> String {
-        s[0..n].to_string()
+        let last_len = min(n, s.len());
+        s[0..last_len].to_string()
+    }
+}
+
+struct Vt100Formatter{}
+
+impl TextFormatter for Vt100Formatter {
+    fn format(&self, s: String, n: usize) -> String {
+        if n >= s.len() { return format!("{:width$}", s, width = n) }
+
+        let vt100s = find_vt100s(s.as_str());
+        if vt100s.last().is_none() { return s[0..n].to_string(); }
+        let mut captured_chars = 0;
+        let mut end = 0;
+
+        for c in vt100s.iter() {
+            if captured_chars < (n - 1) {
+                let next_block_of_text_size = c.start() - end;
+                let next_incr = if captured_chars + next_block_of_text_size >= n {
+                    end = c.start();
+                    (captured_chars + next_block_of_text_size) - n
+                } else {
+                    end = c.end();
+                    next_block_of_text_size
+                };
+
+                captured_chars += next_incr;
+                end = c.end();
+            }
+        };
+
+        if captured_chars < n {
+            end += (n - captured_chars); // grab any remaining characters we need
+        }
+
+        // info!("Str {} chars\n----\n{}\n----", s.len(), s);
+        // info!("Slice:\n-----\n{}\n------", s[0..end].to_string());
+
+        format!("{:width$}", s[0..min(s.len(), end)].to_string(), width = end)
     }
 }
 
 /***
 Orientation: For a LinearLayout. You know what this does.
  */
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum Orientation {
     HORIZONTAL,
     VERTICAL
@@ -92,7 +132,7 @@ LinearLayout: Prints child View widgets' contents, stacked horizontally or verti
  */
 pub struct LinearLayout {
     orientation: Orientation,
-    children: Vec<Box<dyn View>>,
+    children: Vec<Rc<RefCell<dyn View>>>,
     dims: Dimensions,
 }
 
@@ -100,11 +140,10 @@ pub struct LinearLayout {
 Dimensions: An internal struct used to track the constraints and actual size of a View
  */
 #[derive(Copy, Clone)]
-struct Dimensions {
+pub struct Dimensions {
     width_constraint: Dim,
     height_constraint: Dim,
-    width: usize,
-    height: usize
+    size: CharDims  // Actual size in character glyphs
 }
 
 impl Dimensions {
@@ -112,25 +151,12 @@ impl Dimensions {
         Dimensions {
             width_constraint: width,
             height_constraint: height,
-            width: 0,   // Will be calculated during 'inflate' later.
-            height: 0
+            size: (0, 0), // Will be calculated during 'inflate' later.
         }
     }
 }
 
-
-/***
-Handy methods for layout calculations.
-TODO: Move these? They don't really need to be visible to consumers of this crate, just the
-      classes within.
- */
-pub fn calc_view_size(constraint: &Dim, my_dim: &Dim) -> usize {
-    let my_desired_size = desired_size(my_dim);
-    match constraint {
-        Dim::WrapContent => my_desired_size,
-        _ => min(my_desired_size, desired_size(constraint))
-    }
-}
+pub type CharDims = (usize, usize);
 
 pub fn desired_size(constraint: &Dim) -> usize {
     match constraint {
@@ -143,11 +169,19 @@ pub fn desired_size(constraint: &Dim) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+    const VT100_TEST: &str = "T\u{1B}[33mE\u{1B}[96mS\u{1B}[39mT\u{1B}[39m"; // "TEST" interspersed with color codes for VT100 terminals
 
     #[test]
     fn dims_can_be_sorted() {
         assert!(Dim::Fixed(0) < Dim::Fixed(1));
         assert!(Dim::Fixed(1) < Dim::UpTo(1));
         assert!(Dim::Fixed(1000) < Dim::WrapContent);
+    }
+
+    #[test]
+    fn slicing_vt100_string_works() {
+        let fmt = Vt100Formatter{};
+        let fmt_str = fmt.format(VT100_TEST.to_string(), 2);
+        assert_eq!("T\u{1B}[33mE\u{1B}[39m", fmt_str);
     }
 }

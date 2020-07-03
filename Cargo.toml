@@ -11,6 +11,8 @@ debug = true
 regex = "1"
 # Terminal control library
 cursive = { version = "0.15", features = ["crossterm-backend"], default-features = false }
+# Lower-level Terminal control library
+crossterm = "0.17.5"
 # Logging
 log = "0.4"
 simplelog = "^0.7.4"
