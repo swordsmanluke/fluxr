@@ -95,7 +95,9 @@ impl CrossTermUiContext {
     }
 
     fn reinflate_ui(&mut self) -> () {
-        let dims = (80, 45); // Max size of the window. TODO: Get this programatically
+        let (w, h) = terminal_size::terminal_size().unwrap();
+        let dims = (w.0 as usize, h.0 as usize); // Max size of the window.
+        info!("Terminal size: {}x{}", w.0, h.0);
         self.top_view.borrow_mut().inflate(&dims);
     }
 }

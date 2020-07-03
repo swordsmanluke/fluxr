@@ -3,6 +3,7 @@ mod widgets;
 extern crate regex;
 extern crate simplelog;
 extern crate crossterm;
+extern crate terminal_size;
 
 use std::collections::HashMap;
 use std::fs::File;
