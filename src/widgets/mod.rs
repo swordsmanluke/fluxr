@@ -23,8 +23,8 @@ pub enum Dim {
 impl Dim {
     fn to_ord(&self) -> usize {
         match self {
+            Dim::UpTo(x) => *x,
             Dim::Fixed(x) => *x,
-            Dim::UpTo(x) => 1000 + *x,
             Dim::WrapContent => 1_000_000_000,
         }
     }
@@ -59,7 +59,8 @@ TextView: A simple text container. Throw a String at it.
 pub struct TextView {
     raw_text: String,
     dims: Dimensions,
-    formatter: Box<dyn TextFormatter>
+    formatter: Box<dyn TextFormatter>,
+    visible: bool
 }
 
 /***
@@ -95,10 +96,8 @@ impl TextFormatter for Vt100Formatter {
             if captured_chars < (n - 1) {
                 let next_block_of_text_size = c.start() - end;
                 let next_incr = if captured_chars + next_block_of_text_size >= n {
-                    end = c.start();
                     (captured_chars + next_block_of_text_size) - n
                 } else {
-                    end = c.end();
                     next_block_of_text_size
                 };
 
@@ -108,13 +107,14 @@ impl TextFormatter for Vt100Formatter {
         };
 
         if captured_chars < n {
-            end += (n - captured_chars); // grab any remaining characters we need
+            end += n - captured_chars; // grab any remaining characters we need
         }
 
         // info!("Str {} chars\n----\n{}\n----", s.len(), s);
         // info!("Slice:\n-----\n{}\n------", s[0..end].to_string());
 
-        format!("{:width$}", s[0..min(s.len(), end)].to_string(), width = end)
+        let slice_end = min(s.len(), end);
+        format!("{:width$}", s[0..slice_end].to_string(), width = end)
     }
 }
 
@@ -134,6 +134,7 @@ pub struct LinearLayout {
     orientation: Orientation,
     children: Vec<Rc<RefCell<dyn View>>>,
     dims: Dimensions,
+    visible: bool
 }
 
 /***
@@ -174,7 +175,8 @@ mod tests {
     #[test]
     fn dims_can_be_sorted() {
         assert!(Dim::Fixed(0) < Dim::Fixed(1));
-        assert!(Dim::Fixed(1) < Dim::UpTo(1));
+        assert!(Dim::Fixed(1).to_ord() == Dim::UpTo(1).to_ord());
+        assert!(Dim::Fixed(1) < Dim::UpTo(2));
         assert!(Dim::Fixed(1000) < Dim::WrapContent);
     }
 
@@ -182,6 +184,6 @@ mod tests {
     fn slicing_vt100_string_works() {
         let fmt = Vt100Formatter{};
         let fmt_str = fmt.format(VT100_TEST.to_string(), 2);
-        assert_eq!("T\u{1B}[33mE\u{1B}[39m", fmt_str);
+        assert_eq!("T\u{1B}[33mE", fmt_str);
     }
 }

@@ -12,7 +12,7 @@ use regex::{Match, Regex};
 
 use crate::TaskId;
 use crate::tasks::Layout;
-use crate::widgets::{Dim, Dimensions, LinearLayout, Orientation, TextView, View};
+use crate::widgets::{Dim, LinearLayout, Orientation, TextView, View};
 use crossterm::QueueableCommand;
 use crossterm::terminal::{Clear, ClearType};
 

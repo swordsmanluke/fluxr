@@ -3,7 +3,6 @@ use std::cmp::{min, max};
 use std::rc::Rc;
 use std::cell::RefCell;
 use log::info;
-use regex::internal::Char;
 
 
 impl LinearLayout {
@@ -12,6 +11,7 @@ impl LinearLayout {
             orientation: orientation,
             dims: Dimensions::new(width, height),
             children: vec![],
+            visible: true,
         }
     }
 
@@ -87,6 +87,11 @@ impl LinearLayout {
 
 impl View for LinearLayout {
     fn inflate(&mut self, parent_dimensions: &CharDims) -> CharDims {
+        if !self.visible {
+            self.dims.size = (0, 0);
+            return self.dims.size;
+        }
+
         let mut childrens_desired_dims = (0, 0);
         let most_restrictive_width = min(self.dims.width_constraint, Dim::Fixed(parent_dimensions.0));
         let most_restrictive_height = min(self.dims.height_constraint, Dim::Fixed(parent_dimensions.1));
@@ -102,18 +107,19 @@ impl View for LinearLayout {
             remaining_parent_dims = LinearLayout::update_parent_dims(self.orientation, remaining_parent_dims, child_dims);
         }
 
-        match self.dims.width_constraint {
-            Dim::WrapContent => {
-                self.dims.size.0 = childrens_desired_dims.0;
-            }
-            _ => {}
+        let new_most_restrictive_width = min(Dim::Fixed(childrens_desired_dims.0), most_restrictive_width);
+        let new_most_restrictive_height = min(Dim::Fixed(childrens_desired_dims.1), most_restrictive_height);
+
+        self.dims.size.0 = match new_most_restrictive_width {
+            Dim::Fixed(n) => n,
+            Dim::UpTo(n) => n,
+            Dim::WrapContent => 0 // Only happens if we're a "WrapContent" and have 0 or empty children
         };
 
-        match self.dims.height_constraint {
-            Dim::WrapContent => {
-                self.dims.size.1 = childrens_desired_dims.1;
-            }
-            _ => {}
+        self.dims.size.1 = match new_most_restrictive_height {
+            Dim::Fixed(n) => n,
+            Dim::UpTo(n) => n,
+            Dim::WrapContent => 0 // Only happens if we're a "WrapContent" and have 0 or empty children
         };
 
         if self.height() == 0 {
@@ -131,6 +137,8 @@ impl View for LinearLayout {
     fn height(&self) -> usize { self.dims.size.1 }
 
     fn render(&self) -> String {
+        if !self.visible { return String::new() }
+
         match self.orientation {
             Orientation::VERTICAL => self.render_vertical(),
             Orientation::HORIZONTAL => self.render_horizontal()
@@ -250,5 +258,24 @@ mod tests {
         ll.inflate(&(100, 100));
 
         assert_eq!("This is soThis is soThis is so\nwith multiwith multiwith multi".to_string(), ll.render());
+    }
+
+    #[test]
+    fn when_invisible_renders_nothing() {
+        let mut ll = vert_ll_with_fixed_size();
+        ll.add_child(Rc::new(RefCell::new(fixed_size_text_widget())));
+        ll.visible = false;
+        ll.inflate(&(100, 100));
+        assert_eq!(String::from(""), ll.render());
+        assert_eq!(vec![""], ll.render_lines());
+    }
+
+    #[test]
+    fn when_invisible_dims_are_0() {
+        let mut ll = vert_ll_with_fixed_size();
+        ll.add_child(Rc::new(RefCell::new(fixed_size_text_widget())));
+        ll.visible = false;
+        ll.inflate(&(100, 100));
+        assert_eq!(ll.dims.size, (0, 0));
     }
 }

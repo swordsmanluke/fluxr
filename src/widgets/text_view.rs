@@ -1,6 +1,5 @@
-use crate::widgets::{View, TextView, Dim, Dimensions, DumbFormatter, desired_size, Vt100Formatter, CharDims};
+use crate::widgets::{View, TextView, Dim, Dimensions, desired_size, Vt100Formatter, CharDims};
 use std::cmp::min;
-use log::info;
 
 impl TextView {
     pub fn new(width: Dim, height: Dim) -> TextView {
@@ -11,7 +10,8 @@ impl TextView {
                 height_constraint: height,
                 size: (0, 0)
             },
-            formatter: Box::new(Vt100Formatter{})
+            formatter: Box::new(Vt100Formatter{}),
+            visible: true
         }
     }
 
@@ -22,6 +22,11 @@ impl TextView {
 
 impl View for TextView {
     fn inflate(&mut self, parent_dimensions: &CharDims) -> CharDims {
+        if !self.visible {
+            self.dims.size = (0, 0);
+            return self.dims.size;
+        }
+
         let desired_width_constraint = Dim::UpTo(self.raw_text.split("\n").map(|c| c.len()).max().unwrap_or(0));
         let desired_height_constraint  = Dim::UpTo(self.raw_text.split("\n").count());
 
@@ -143,5 +148,24 @@ mod tests {
         tw.raw_text = String::from("some really long text\nand another really long line\nthis line doesn't show up at all");
         tw.inflate(&(100, 100));
         assert_eq!(String::from("some reall\nand anothe"), tw.render());
+    }
+
+    #[test]
+    fn when_invisible_renders_nothing() {
+        let mut tw = fixed_size_text_widget();
+        tw.raw_text = String::from("some really long text\nand another really long line\nthis line doesn't show up at all");
+        tw.visible = false;
+        tw.inflate(&(100, 100));
+        assert_eq!(String::from(""), tw.render());
+        assert_eq!(vec![""], tw.render_lines());
+    }
+
+    #[test]
+    fn when_invisible_dims_are_0() {
+        let mut tw = fixed_size_text_widget();
+        tw.raw_text = String::from("some really long text\nand another really long line\nthis line doesn't show up at all");
+        tw.visible = false;
+        tw.inflate(&(100, 100));
+        assert_eq!(tw.dims.size, (0, 0));
     }
 }
