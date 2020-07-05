@@ -27,33 +27,15 @@ impl View for TextView {
             return self.dims.size;
         }
 
-        let desired_width_constraint = Dim::UpTo(self.raw_text.split("\n").map(|c| c.len()).max().unwrap_or(0));
+        let text_size = self.raw_text.split("\n").map(|c| c.len()).max().unwrap();
+        let desired_width_constraint = Dim::UpTo(text_size);
         let desired_height_constraint  = Dim::UpTo(self.raw_text.split("\n").count());
 
         let most_restrictive_width = min(desired_width_constraint, min(self.dims.width_constraint, Dim::Fixed(parent_dimensions.0)));
         let most_restrictive_height= min(desired_height_constraint,  min(self.dims.height_constraint, Dim::Fixed(parent_dimensions.1)));
 
-        self.dims = Dimensions{
-            width_constraint: most_restrictive_width,
-            height_constraint: most_restrictive_height,
-            size: (desired_size(&most_restrictive_width),
-                   desired_size(&most_restrictive_height)),
-        };
-
-        match self.dims.width_constraint {
-            Dim::WrapContent => {
-                self.dims.size.0 = self.raw_text.split("\n").map(|s| s.len()).max().unwrap_or(0);
-            }
-            _ => {}
-        };
-
-        match self.dims.height_constraint {
-            // TODO: This could be a little smarter and consider wrapped lines, but that's a "tomorrow" feature
-            Dim::WrapContent => {
-                self.dims.size.1 = self.raw_text.split("\n").count() + 1;
-            }
-            _ => {}
-        };
+        self.dims.size = (desired_size(&most_restrictive_width),
+                          desired_size(&most_restrictive_height));
 
         self.dims.size.clone()
     }

@@ -93,7 +93,7 @@ impl TextFormatter for Vt100Formatter {
         let mut end = 0;
 
         for c in vt100s.iter() {
-            if captured_chars < (n - 1) {
+            if (captured_chars + 1) < n {  // cc+1 to avoid subtraction with overflow
                 let next_block_of_text_size = c.start() - end;
                 let next_incr = if captured_chars + next_block_of_text_size >= n {
                     (captured_chars + next_block_of_text_size) - n

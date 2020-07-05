@@ -15,6 +15,7 @@ use crate::tasks::Layout;
 use crate::widgets::{Dim, LinearLayout, Orientation, TextView, View};
 use crossterm::QueueableCommand;
 use crossterm::terminal::{Clear, ClearType};
+use terminal_size::{Width, Height};
 
 type WindowMap = HashMap<TaskId, Weak<RefCell<TextView>>>;
 type RcView = Rc<RefCell<dyn View>>;
@@ -95,7 +96,7 @@ impl CrossTermUiContext {
     }
 
     fn reinflate_ui(&mut self) -> () {
-        let (w, h) = terminal_size::terminal_size().unwrap();
+        let (w, h) = terminal_size::terminal_size().unwrap_or((Width(78), Height(15)));
         let dims = (w.0 as usize, h.0 as usize); // Max size of the window.
         info!("Terminal size: {}x{}", w.0, h.0);
         self.top_view.borrow_mut().inflate(&dims);
