@@ -3,19 +3,19 @@ use std::collections::HashMap;
 use std::io::{stdout, Stdout, Write};
 use std::rc::{Rc, Weak};
 use std::sync::mpsc::Receiver;
-use std::time::Instant;
+use std::time::{Instant, Duration};
 
-use crossterm::cursor::MoveTo;
-use crossterm::style::Print;
+use crossterm::cursor::{Hide, MoveTo, MoveToNextLine};
+use crossterm::{QueueableCommand, ExecutableCommand, Result};
+use crossterm::style::{self, Colorize, Print, PrintStyledContent};
+use crossterm::terminal::{Clear, ClearType};
+use crossterm::event::{read, Event, poll, KeyModifiers, KeyCode, KeyEvent};
 use log::{info, trace};
 use regex::{Match, Regex};
 
 use crate::TaskId;
 use crate::tasks::Layout;
 use crate::widgets::{Dim, LinearLayout, Orientation, TextView, View};
-use crossterm::QueueableCommand;
-use crossterm::terminal::{Clear, ClearType};
-use terminal_size::{Width, Height};
 
 type WindowMap = HashMap<TaskId, Weak<RefCell<TextView>>>;
 type RcView = Rc<RefCell<dyn View>>;
@@ -25,6 +25,7 @@ pub struct CrossTermUiContext {
     top_view: RcView,
     rx: Receiver<HashMap<TaskId, String>>,
     fps_tracker: FpsTracker,
+    console_text: String,
     stdout: Stdout,
 }
 
@@ -33,26 +34,36 @@ impl CrossTermUiContext {
         let mut windows = WindowMap::new();
         let top_view = construct_layout(&layout, &mut windows);
         let fps_tracker = FpsTracker { updates: 0.0, elapsed: 0 };
+        let console_text = String::new();
 
         CrossTermUiContext {
             windows,
             top_view,
             rx,
             fps_tracker,
+            console_text,
             stdout: stdout()
         }
     }
 
     pub fn run_ui_loop(&mut self) -> (){
-        self.stdout.queue(Clear(ClearType::All)).unwrap();
+        crossterm::terminal::enable_raw_mode().unwrap();
+        self.stdout.
+            queue(Hide).unwrap().
+            queue(crossterm::terminal::EnterAlternateScreen).unwrap().
+            queue(Clear(ClearType::All)).unwrap();
+
         self.stdout.flush().unwrap();
 
         let mut last_log = Instant::now();
         loop {
             let start = Instant::now();
-            self.wait_for_updates();
-            self.reinflate_ui();
-            self.draw_ui();
+
+            if self.wait_for_updates() {
+                self.reinflate_ui().unwrap_or({info!("Failed to reinflate ui!")});
+                self.draw_ui().unwrap_or({info!("Failed to draw ui!")});
+            }
+
             self.fps_tracker.elapsed += start.elapsed().as_millis();
 
             if last_log.elapsed().as_secs() > 10 {
@@ -62,22 +73,113 @@ impl CrossTermUiContext {
         }
     }
 
-    fn wait_for_updates(&mut self) {
-        match self.rx.recv() {
+    fn wait_for_updates(&mut self) -> bool {
+        self.check_for_keypress().unwrap() || self.check_for_task_updates()
+    }
+
+    fn check_for_task_updates(&mut self) -> bool {
+        match self.rx.try_recv() {
             Ok(cmd_text) => {
                 self.update_output(&cmd_text);
+                true
             },
-            Err(_) => {}
+            Err(_) => { false }
         }
     }
 
-    fn draw_ui(&mut self) {
-        let output = self.top_view.borrow_mut().render();
-        self.stdout.
-            queue(MoveTo(0, 0)).unwrap().
-            queue(Print(output)).unwrap();
+    fn check_for_keypress(&mut self) -> Result<bool> {
+        // `read()` blocks until an `Event` is available, so call `poll` to check first.
+        if poll(Duration::from_millis(100))? {
+            let event = read()?;
+            match event {
+                Event::Key(event) => {
+                    match event {
+                        // CTRL_C
+                        KeyEvent{
+                            code: KeyCode::Char('c'),
+                            modifiers: KeyModifiers::CONTROL
+                        } => {
+                            // TODO: Move this out of here.
+                            // Reset terminal
+                            self.stdout.
+                                queue(crossterm::cursor::Show)?.
+                                queue(crossterm::terminal::LeaveAlternateScreen)?;
+                            self.stdout.flush()?;
+                            crossterm::terminal::disable_raw_mode()?;
+                            // and uh, exit...
+                            panic!("USER QUIT!")
+                        },
+                        // CTRL_U
+                        KeyEvent{
+                            code: KeyCode::Char('u'),
+                            modifiers: KeyModifiers::CONTROL
+                        } => {
+                            info!("Clear buffer");
+                            self.console_text = String::new();
+                        },
+                        // ENTER
+                        KeyEvent{
+                            code: KeyCode::Enter,
+                            modifiers: KeyModifiers::NONE
+                        } => {
+                            info!("Running command: {}", self.console_text);
+                            // TODO: Find the ExecutableCommand to load and run it with args.
+                            self.console_text = String::new();
+                            return Ok(true);
+                        },
+                        // General key press
+                        KeyEvent{
+                            code: KeyCode::Char(c),
+                            modifiers: KeyModifiers::NONE
+                        } => {
+                            self.console_text += c.to_string().as_str();
+                            return Ok(true);
+                        },
+                        // I don't care about anything else
+                        _ => {}
+                    }
+                    info!("Key Event: {:?}", event);
+                },
+                _ => { info!("Other Event: {:?}", event) } // Nothing to do here.
+            }
+        }
+        Ok(false)
+    }
 
-        self.stdout.flush().unwrap();
+    fn draw_ui(&mut self) -> Result<()>{
+        let output = self.top_view.borrow_mut().render_lines();
+
+        self.stdout.
+            queue(MoveTo(0, 0))?;
+
+        for line in output {
+            self.stdout.
+                queue(Print(line))?.
+                queue(MoveToNextLine(1))?;
+        }
+
+        self.draw_console()?;
+
+        self.stdout.flush()?;
+
+        Ok(())
+    }
+
+    fn draw_console(&mut self) -> Result<()>{
+        let command = self.console_text.as_str();
+
+        if !command.is_empty() {
+            let (w, _) = crossterm::terminal::size()?;
+            let spcs_reqd : usize = (w as usize) - (3 + command.len()); // prompt + length of command
+
+            self.stdout.
+                queue(MoveTo(4, 15))?.
+                queue(PrintStyledContent("> ".green()))?.
+                queue(Print(command))?.
+                queue(Print(format!("{:width$}", "", width=spcs_reqd)))?;
+        };
+
+        Ok(())
     }
 
     pub fn update_output(&mut self, output: &HashMap<String, String>) {
@@ -95,11 +197,12 @@ impl CrossTermUiContext {
         }
     }
 
-    fn reinflate_ui(&mut self) -> () {
-        let (w, h) = terminal_size::terminal_size().unwrap_or((Width(78), Height(15)));
-        let dims = (w.0 as usize, h.0 as usize); // Max size of the window.
-        info!("Terminal size: {}x{}", w.0, h.0);
+    fn reinflate_ui(&mut self) -> Result<()> {
+        let (w, h) = crossterm::terminal::size()?;
+        let dims = (w as usize, h as usize); // Max size of the window.
+        info!("Terminal size: {}x{}", w, h);
         self.top_view.borrow_mut().inflate(&dims);
+        Ok(())
     }
 }
 
