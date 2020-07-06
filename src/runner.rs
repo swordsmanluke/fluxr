@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::process::{Command, Output};
 use std::str;
-use std::sync::mpsc::Sender;
+use std::sync::mpsc::{Sender, Receiver};
 use std::thread;
 use std::thread::{JoinHandle, sleep};
 
@@ -12,16 +12,20 @@ use log::{trace, info, warn};
 
 pub struct TaskRunner {
     pub commands: Vec<ExecutableCommand>,
-    tx: Sender<HashMap<String, String>>,
+    system_command_sender: Sender<HashMap<String, String>>,
+    run_task_receiver: Receiver<String>,
+    running: bool,
 }
 
 impl TaskRunner {
-    pub fn new(tasks: Vec<Task>, tx: Sender<HashMap<String, String>>) -> TaskRunner {
-        let cmds = tasks.iter().
+    pub fn new(tasks: Vec<Task>,
+               system_command_sender: Sender<HashMap<String, String>>,
+               run_task_receiver: Receiver<String>) -> TaskRunner {
+        let commands = tasks.iter().
             map(|t| task_to_command(t)).
             collect();
 
-        TaskRunner { commands: cmds, tx: tx }
+        TaskRunner { commands, system_command_sender, run_task_receiver, running: true }
     }
 
     pub fn run(&mut self) {
@@ -29,14 +33,32 @@ impl TaskRunner {
             self.run_task_loop(&cmd)
         ).collect();
 
+        while self.running {
+            match self.run_task_receiver.recv() {
+                Ok(command) => {
+                    let task_id = command.
+                        split_whitespace().
+                        next().
+                        unwrap_or("").
+                        to_string();
+
+                    self.run_command(task_id, command);
+                }
+                Err(_) => {}
+            }
+        }
+
         for h in handles { h.join().unwrap_or_else(|_| {}); }
     }
 
     pub fn run_command(&self, task_id: String, command: String) {
         match self.commands.iter().find(|cmd| cmd.id == task_id) {
-            Some(mut cmd) => {
+            Some(cmd) => {
                 let mut mutcmd = cmd.clone();
-                mutcmd.command = command;
+                let mut parts = command.split_whitespace();
+                parts.next(); // pop the initial command off
+                mutcmd.command += " ";
+                mutcmd.command += parts.collect::<Vec<&str>>().join(" ").as_str();
 
                 self.run_task_once(&mutcmd);
             }
@@ -45,7 +67,7 @@ impl TaskRunner {
     }
 
     fn run_task_loop(&self, command: &ExecutableCommand) -> JoinHandle<()> {
-        let trx = self.tx.clone();
+        let trx = self.system_command_sender.clone();
         let cmd = command.clone();
         info!("spawn {} thread", cmd.id);
 
@@ -67,17 +89,14 @@ impl TaskRunner {
             }).unwrap()
     }
 
-    fn run_task_once(&self, command: &ExecutableCommand) -> JoinHandle<()> {
-        let trx = self.tx.clone();
+    fn run_task_once(&self, command: &ExecutableCommand) -> () {
+        let trx = self.system_command_sender.clone();
         let cmd = command.clone();
         info!("Running manual '{}' command", cmd.id);
 
-        thread::Builder::new().name(cmd.id.clone()).spawn(move ||
-            {
-                let mut h = HashMap::new();
-                h.insert(cmd.id.clone(), convert_output(exec_command(cmd.command.clone(), cmd.working_dir.clone())));
-                trx.send(h).unwrap();
-            }).unwrap()
+        let mut h = HashMap::new();
+        h.insert(cmd.id.clone(), convert_output(exec_command(cmd.command.clone(), cmd.working_dir.clone())));
+        trx.send(h).unwrap();
     }
 }
 
@@ -103,6 +122,8 @@ fn exec_command(command: String, working_dir: String) -> Output {
     let mut parts = command.trim().split_whitespace();
     let cmd = parts.next().unwrap();
     let args = parts;
+
+    info!("Running {}/{} {}", working_dir, cmd, args.clone().map(|s| s.to_string()).collect::<Vec<String>>().join(" "));
 
     Command::new(vec!(working_dir.clone(), cmd.to_string()).join("/"))
         .current_dir(working_dir.clone())

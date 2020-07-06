@@ -4,8 +4,6 @@ use std::fmt;
 use serde::Deserialize;
 use std::ops::Deref;
 use serde::export::Formatter;
-use std::error::Error;
-use log::{info, error};
 
 #[derive(Deserialize, Clone)]
 pub struct Config {
@@ -74,12 +72,9 @@ pub fn load_task_config() -> Option<Config> {
         Ok(conf) => {
             let conf = populate_layout_ids(conf)?;
             match how_many_mains(&conf.layout) {
-                0 => {
-                    panic!("No 'main' layout! Mark one of your textviews as being 'main'");
-                    None
-                },
+                0 => { panic!("No 'main' layout! Mark one of your textviews as being 'main'"); },
                 1 => { Some(conf) }, // perfect!
-                _ => { panic!("More than one 'main' textview in tasks.toml!"); None }
+                _ => { panic!("More than one 'main' textview in tasks.toml!"); }
             }
         },
         Err(err) => {

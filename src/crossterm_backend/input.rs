@@ -3,7 +3,7 @@ use std::sync::mpsc::{Sender, SendError};
 use std::collections::HashMap;
 use crossterm::event::{read, Event, KeyModifiers, KeyCode, KeyEvent};
 
-pub fn wait_for_keypress(tx: Sender<HashMap<String, String>>) -> Result<(), SendError<HashMap<String, String>>> {
+pub fn wait_for_keypress(command_sender: Sender<HashMap<String, String>>) -> Result<(), SendError<HashMap<String, String>>> {
     loop {
         let console = "console".to_string();
         match read().unwrap() {
@@ -18,7 +18,7 @@ pub fn wait_for_keypress(tx: Sender<HashMap<String, String>>) -> Result<(), Send
                         info!("Shutting down...");
                         let mut h = HashMap::new();
                         h.insert("system".to_string(), "\\u001bQ".to_string());
-                        tx.send(h)?;
+                        command_sender.send(h)?;
                         break; // exit the loop and stop accepting input
                     },
                     // CTRL_U
@@ -29,7 +29,7 @@ pub fn wait_for_keypress(tx: Sender<HashMap<String, String>>) -> Result<(), Send
                         info!("Clear buffer");
                         let mut h = HashMap::new();
                         h.insert(console, "\\u001bU".to_string());
-                        tx.send(h)?;
+                        command_sender.send(h)?;
                     },
                     // ENTER
                     KeyEvent {
@@ -38,7 +38,7 @@ pub fn wait_for_keypress(tx: Sender<HashMap<String, String>>) -> Result<(), Send
                     } => {
                         let mut h = HashMap::new();
                         h.insert(console, "\n".to_string());
-                        tx.send(h)?;
+                        command_sender.send(h)?;
                     },
                     // General key press
                     KeyEvent {
@@ -47,7 +47,7 @@ pub fn wait_for_keypress(tx: Sender<HashMap<String, String>>) -> Result<(), Send
                     } => {
                         let mut h = HashMap::new();
                         h.insert(console, c.to_string());
-                        tx.send(h)?;
+                        command_sender.send(h)?;
                     },
                     // I don't care about anything else
                     _ => {}

@@ -26,8 +26,9 @@ type RcView = Rc<RefCell<dyn View>>;
 pub struct CrossTermUiContext {
     windows: WindowMap,
     top_view: RcView,
-    rx: Receiver<HashMap<TaskId, String>>,
-    tx: Sender<HashMap<String, String>>,
+    command_receiver: Receiver<HashMap<TaskId, String>>,
+    command_sender: Sender<HashMap<String, String>>,
+    task_sender: Sender<String>,
     fps_tracker: FpsTracker,
     console_text: String,
     stdout: Stdout,
@@ -35,7 +36,7 @@ pub struct CrossTermUiContext {
 }
 
 impl CrossTermUiContext {
-    pub fn new(layout: Layout, rx: Receiver<HashMap<TaskId, String>>, tx: Sender<HashMap<String, String>>) -> CrossTermUiContext {
+    pub fn new(layout: Layout, command_receiver: Receiver<HashMap<TaskId, String>>, command_sender: Sender<HashMap<String, String>>, task_sender: Sender<String>) -> CrossTermUiContext {
         let mut windows = WindowMap::new();
         let top_view = construct_layout(&layout, &mut windows);
         let fps_tracker = FpsTracker { updates: 0.0, elapsed: 0 };
@@ -44,8 +45,9 @@ impl CrossTermUiContext {
         CrossTermUiContext {
             windows,
             top_view,
-            rx,
-            tx,
+            command_receiver,
+            command_sender,
+            task_sender,
             fps_tracker,
             console_text,
             stdout: stdout(),
@@ -62,8 +64,8 @@ impl CrossTermUiContext {
 
         self.stdout.flush().unwrap();
 
-        let ntx = self.tx.clone();
-        thread::spawn( move || { wait_for_keypress(ntx); });
+        let command_sender = self.command_sender.clone();
+        thread::spawn( move || { wait_for_keypress(command_sender) });
 
         let mut last_log = Instant::now();
         while self.running {
@@ -93,7 +95,7 @@ impl CrossTermUiContext {
     }
 
     fn wait_for_updates(&mut self) -> bool {
-        match self.rx.recv() {
+        match self.command_receiver.recv() {
             Ok(cmd_text) => {
                 self.handle_commands(&cmd_text);
                 true
@@ -177,8 +179,8 @@ impl CrossTermUiContext {
     }
 
     fn execute_console_cmd(&mut self) {
-        // TODO: Talk to TaskRunner
         info!("Running {}", self.console_text);
+        self.task_sender.send(self.console_text.clone()).unwrap();
         self.console_text = String::new();
     }
 }

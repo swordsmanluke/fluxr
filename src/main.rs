@@ -13,23 +13,33 @@ use std::thread;
 use simplelog::*;
 use log::info;
 
-use crate::terminal_control::initialize_cursive_ctx;
 use crate::runner::TaskRunner;
 use crate::tasks::Layout;
 use std::thread::JoinHandle;
-use ui_context::UIContext;
 use crate::crossterm_backend::CrossTermUiContext;
 
 
 mod tasks;
 mod executable_command;
-mod terminal_control;
-mod cursive_formatter;
 mod runner;
-mod ui_context;
 mod crossterm_backend;
 
 pub type TaskId = String;
+
+pub struct Channel<T> {
+    pub tx: Sender<T>,
+    pub rx: Receiver<T>
+}
+
+impl<T> Channel<T> {
+    pub fn new(tx: Sender<T>, rx: Receiver<T>) -> Channel<T> {
+        Channel { tx, rx }
+    }
+
+    pub fn from(tuple: (Sender<T>, Receiver<T>)) -> Channel<T> {
+        Channel::new(tuple.0, tuple.1)
+    }
+}
 
 fn main() {
     init_logging();
@@ -37,35 +47,26 @@ fn main() {
     let config = tasks::load_task_config().unwrap();
     let layout = config.layout;
 
-    let (tx, rx) = mpsc::channel();
+    let system_command_channel = Channel::from(mpsc::channel());
+    let task_running_channel = Channel::from(mpsc::channel());
 
-    let mut runner = TaskRunner::new(config.tasks, tx.clone());
+    let mut runner = TaskRunner::new(config.tasks, system_command_channel.tx.clone(), task_running_channel.rx);
 
-    thread::spawn( move || {
-        runner.run();
-    });
+    thread::spawn( move || { runner.run(); });
 
-    if true {
-        launch_crossterm(layout, rx, tx.clone()).join().unwrap_or({});
-    } else {
-        // Use the Cursive backend
-        launch_siv(layout, rx).join().unwrap_or({});
-    }
+    launch_crossterm(layout,
+                     system_command_channel.rx,
+                     system_command_channel.tx,
+                     task_running_channel.tx.clone()).join().unwrap_or({});
 }
 
-fn launch_crossterm(layout: Layout, rx: Receiver<HashMap<String, String>>, tx: Sender<HashMap<String, String>>) -> JoinHandle<()> {
+fn launch_crossterm(layout: Layout,
+                    command_receiver: Receiver<HashMap<String, String>>,
+                    command_sender: Sender<HashMap<String, String>>,
+                    task_sender: Sender<String>) -> JoinHandle<()> {
     thread::spawn(move || {
         info!("Setting up crossterm!");
-        let mut ctx = CrossTermUiContext::new(layout, rx, tx);
-        ctx.run_ui_loop();
-    })
-}
-
-fn launch_siv(layout: Layout, rx: Receiver<HashMap<String, String>>) -> JoinHandle<()> {
-    thread::spawn(move || {
-        info!("Setting up siv!");
-        let siv = initialize_cursive_ctx();
-        let mut ctx = UIContext::new(layout, rx, siv);
+        let mut ctx = CrossTermUiContext::new(layout, command_receiver, command_sender, task_sender);
         ctx.run_ui_loop();
     })
 }
