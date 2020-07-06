@@ -8,7 +8,7 @@ use std::thread::{JoinHandle, sleep};
 use crate::executable_command::ExecutableCommand;
 use crate::tasks::Task;
 use std::time::{SystemTime, Duration};
-use log::{trace, info};
+use log::{trace, info, warn};
 
 pub struct TaskRunner {
     pub commands: Vec<ExecutableCommand>,
@@ -26,13 +26,25 @@ impl TaskRunner {
 
     pub fn run(&mut self) {
         let handles: Vec<JoinHandle<()>> = self.commands.iter().map(|cmd|
-            self.launch_task_thread(&cmd)
+            self.run_task_loop(&cmd)
         ).collect();
 
         for h in handles { h.join().unwrap_or_else(|_| {}); }
     }
 
-    fn launch_task_thread(&self, command: &ExecutableCommand) -> JoinHandle<()> {
+    pub fn run_command(&self, task_id: String, command: String) {
+        match self.commands.iter().find(|cmd| cmd.id == task_id) {
+            Some(mut cmd) => {
+                let mut mutcmd = cmd.clone();
+                mutcmd.command = command;
+
+                self.run_task_once(&mutcmd);
+            }
+            None => { warn!("Could not find command '{}'", task_id) }
+        }
+    }
+
+    fn run_task_loop(&self, command: &ExecutableCommand) -> JoinHandle<()> {
         let trx = self.tx.clone();
         let cmd = command.clone();
         info!("spawn {} thread", cmd.id);
@@ -52,6 +64,19 @@ impl TaskRunner {
                     trace!("{} sleeping for {}ms", cmd.id, nap_millis);
                     sleep(naptime);
                 }
+            }).unwrap()
+    }
+
+    fn run_task_once(&self, command: &ExecutableCommand) -> JoinHandle<()> {
+        let trx = self.tx.clone();
+        let cmd = command.clone();
+        info!("Running manual '{}' command", cmd.id);
+
+        thread::Builder::new().name(cmd.id.clone()).spawn(move ||
+            {
+                let mut h = HashMap::new();
+                h.insert(cmd.id.clone(), convert_output(exec_command(cmd.command.clone(), cmd.working_dir.clone())));
+                trx.send(h).unwrap();
             }).unwrap()
     }
 }

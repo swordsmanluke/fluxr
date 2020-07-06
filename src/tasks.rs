@@ -4,14 +4,16 @@ use std::fmt;
 use serde::Deserialize;
 use std::ops::Deref;
 use serde::export::Formatter;
+use std::error::Error;
+use log::{info, error};
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct Config {
     pub tasks: Vec<Task>,
     pub layout: Layout,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct Task {
     pub id: String,
     pub name: String,
@@ -21,9 +23,11 @@ pub struct Task {
     pub period: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct Layout {
     pub kind: String,
+    pub layout_id: Option<String>,
+    pub main: Option<bool>,
     pub children: Option<Vec<Layout>>,
     pub orientation: Option<String>,
     pub width: Option<usize>,
@@ -65,11 +69,39 @@ pub fn load_task_config() -> Option<Config> {
     let mut toml_tasks = String::new();
     tasks_file.read_to_string(&mut toml_tasks).unwrap();
     let config = toml::from_str(&toml_tasks);
+
     match config {
-        Ok(conf) => Some(conf),
+        Ok(conf) => {
+            let conf = populate_layout_ids(conf)?;
+            match how_many_mains(&conf.layout) {
+                0 => {
+                    panic!("No 'main' layout! Mark one of your textviews as being 'main'");
+                    None
+                },
+                1 => { Some(conf) }, // perfect!
+                _ => { panic!("More than one 'main' textview in tasks.toml!"); None }
+            }
+        },
         Err(err) => {
             println!("conf err: {}", err);
             None
         }
     }
+}
+
+pub fn populate_layout_ids(conf: Config) -> Option<Config> {
+    Some(conf)
+}
+
+pub fn how_many_mains(l: &Layout) -> usize {
+    let main_children = match &l.children {
+        Some(children) => { children.iter().map(|c| how_many_mains(c)).sum() },
+        None => 0
+    };
+
+    let total_mains = if l.main.unwrap_or(false) { 1 } else { 0 } + main_children;
+
+    if l.main.unwrap_or(false) && l.kind != "textview".to_string() { panic!("only textview's can be 'main'"); }
+
+    total_mains
 }

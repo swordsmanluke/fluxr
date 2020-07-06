@@ -7,7 +7,7 @@ extern crate crossterm;
 use std::collections::HashMap;
 use std::fs::File;
 use std::sync::mpsc;
-use std::sync::mpsc::Receiver;
+use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 
 use simplelog::*;
@@ -39,24 +39,24 @@ fn main() {
 
     let (tx, rx) = mpsc::channel();
 
-    let mut runner = TaskRunner::new(config.tasks, tx);
+    let mut runner = TaskRunner::new(config.tasks, tx.clone());
 
     thread::spawn( move || {
         runner.run();
     });
 
     if true {
-        launch_crossterm(layout, rx).join().unwrap_or({});
+        launch_crossterm(layout, rx, tx.clone()).join().unwrap_or({});
     } else {
         // Use the Cursive backend
         launch_siv(layout, rx).join().unwrap_or({});
     }
 }
 
-fn launch_crossterm(layout: Layout, rx: Receiver<HashMap<String, String>>) -> JoinHandle<()> {
+fn launch_crossterm(layout: Layout, rx: Receiver<HashMap<String, String>>, tx: Sender<HashMap<String, String>>) -> JoinHandle<()> {
     thread::spawn(move || {
         info!("Setting up crossterm!");
-        let mut ctx = CrossTermUiContext::new(layout, rx);
+        let mut ctx = CrossTermUiContext::new(layout, rx, tx);
         ctx.run_ui_loop();
     })
 }
