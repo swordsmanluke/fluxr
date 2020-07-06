@@ -9,9 +9,6 @@ debug = true
 [dependencies]
 # Regex for parsing terminal output
 regex = "1"
-
-# Terminal control library
-cursive = { version = "0.15", features = ["crossterm-backend"], default-features = false }
 # Lower-level Terminal control library
 crossterm = "0.17.5"
 # Logging
