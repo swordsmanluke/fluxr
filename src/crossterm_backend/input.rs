@@ -40,6 +40,15 @@ pub fn wait_for_keypress(command_sender: Sender<HashMap<String, String>>) -> Res
                         h.insert(console, "\n".to_string());
                         command_sender.send(h)?;
                     },
+                    // BACKSPACE
+                    KeyEvent {
+                        code: KeyCode::Backspace,
+                        modifiers: KeyModifiers::NONE
+                    } => {
+                        let mut h = HashMap::new();
+                        h.insert(console, "\\h".to_string());
+                        command_sender.send(h)?;
+                    },
                     // General key press
                     KeyEvent {
                         code: KeyCode::Char(c),
@@ -47,6 +56,14 @@ pub fn wait_for_keypress(command_sender: Sender<HashMap<String, String>>) -> Res
                     } => {
                         let mut h = HashMap::new();
                         h.insert(console, c.to_string());
+                        command_sender.send(h)?;
+                    },
+                    KeyEvent {
+                        code: KeyCode::Char(c),
+                        modifiers: KeyModifiers::SHIFT
+                    } => {
+                        let mut h = HashMap::new();
+                        h.insert(console, c.to_string().to_uppercase());
                         command_sender.send(h)?;
                     },
                     // I don't care about anything else

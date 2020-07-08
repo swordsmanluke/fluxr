@@ -152,6 +152,7 @@ impl CrossTermUiContext {
                 "console" => {
                     match content.as_str() {
                         "\n" => self.execute_console_cmd(),
+                        "\\h" => if self.console_text.len() > 0 { self.console_text = self.console_text[0..self.console_text.len() - 1].to_string() },
                         "\\u001bU" => self.console_text = String::new(),
                         _ => self.console_text += content
                     }
